@@ -4,12 +4,15 @@ Chrome side-panel UI and local bridge extension for Pi.
 
 ## Current phase
 
-Phase 1 skeleton/package setup:
+Phase 2 Pi extension launcher foundation:
 
 - TypeScript package metadata
 - Shared protocol types
 - Build and test scripts
 - Planned runtime directories for Pi extension, bridge, protocol, and Chrome extension
+- Test-covered launcher command parsing
+- Test-covered bridge process spawning with terminal context defaults
+- Test-covered Chrome opener
 
 ## Development
 
