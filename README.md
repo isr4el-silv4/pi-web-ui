@@ -21,6 +21,10 @@ Phase 2 Pi extension launcher foundation:
 - Extension bridge WebSocket client
 - Initial browser tool executor for tabs/page/debugger operations
 - Bridge-side permission enforcement for browser tools
+- Console and network capture buffers
+- Extension UI adapter for confirm/input/notify flows
+- Audit log primitive for sensitive browser actions
+- SDK session host adapter seam
 
 ## Development
 
