@@ -10,6 +10,8 @@ const els = {
   offline: document.querySelector('#offline'),
   session: document.querySelector('#session'),
   messages: document.querySelector('#messages'),
+  uiRequests: document.querySelector('#ui-requests'),
+  notifications: document.querySelector('#notifications'),
   form: document.querySelector('#prompt-form'),
   prompt: document.querySelector('#prompt'),
   cwd: document.querySelector('#cwd'),
@@ -26,6 +28,21 @@ function render() {
   els.cookies.checked = state.cookieAccessEnabled;
   els.storage.checked = state.storageAccessEnabled;
   els.mode.value = state.permissionMode;
+  els.uiRequests.innerHTML = '';
+  for (const request of state.uiRequests) {
+    const item = document.createElement('div');
+    item.className = 'message';
+    item.textContent = request.message ?? request.kind;
+    const ok = document.createElement('button');
+    ok.textContent = 'OK';
+    ok.addEventListener('click', () => {
+      client.sendCommand({ type: 'extension_ui_response', id: request.id, value: request.kind === 'confirm' ? true : '' });
+      dispatch({ type: 'extension_ui_response_sent', id: request.id });
+    });
+    item.append(ok);
+    els.uiRequests.append(item);
+  }
+  els.notifications.textContent = state.notifications.join('\n');
   els.messages.innerHTML = '';
   for (const message of state.messages) {
     const item = document.createElement('div');

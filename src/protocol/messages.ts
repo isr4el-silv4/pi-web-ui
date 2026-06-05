@@ -9,7 +9,8 @@ export type ClientCommand =
   | { type: 'resume_session'; sessionPath: string }
   | { type: 'set_permission_mode'; mode: PermissionMode }
   | { type: 'set_cookie_access'; enabled: boolean }
-  | { type: 'set_storage_access'; enabled: boolean };
+  | { type: 'set_storage_access'; enabled: boolean }
+  | { type: 'extension_ui_response'; id: string; value: unknown };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -32,6 +33,8 @@ export function isClientCommand(value: unknown): value is ClientCommand {
     case 'set_cookie_access':
     case 'set_storage_access':
       return typeof value.enabled === 'boolean';
+    case 'extension_ui_response':
+      return typeof value.id === 'string';
     default:
       return false;
   }

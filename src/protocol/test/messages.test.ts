@@ -56,6 +56,7 @@ describe('protocol messages', () => {
     expect(isClientCommand({ type: 'resume_session', sessionPath: '/tmp/session.jsonl' })).toBe(true);
     expect(isClientCommand({ type: 'set_permission_mode', mode: 'debug' })).toBe(true);
     expect(isClientCommand({ type: 'set_cookie_access', enabled: false })).toBe(true);
+    expect(isClientCommand({ type: 'extension_ui_response', id: 'ui-1', value: true })).toBe(true);
     expect(isClientCommand({ type: 'set_cookie_access', enabled: 'false' })).toBe(false);
   });
 });

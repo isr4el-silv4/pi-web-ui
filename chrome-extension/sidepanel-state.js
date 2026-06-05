@@ -5,6 +5,8 @@ export function createInitialState() {
     cookieAccessEnabled: false,
     storageAccessEnabled: false,
     messages: [],
+    uiRequests: [],
+    notifications: [],
     session: undefined,
   };
 }
@@ -29,6 +31,12 @@ export function reduceSidePanelState(state, event) {
     case 'assistant_message':
     case 'prompt_received':
       return { ...state, messages: [...state.messages, { role: 'assistant', text: event.text ?? event.message }] };
+    case 'extension_ui_request':
+      return { ...state, uiRequests: [...state.uiRequests, { id: event.id, kind: event.kind, message: event.message, options: event.options }] };
+    case 'extension_ui_notify':
+      return { ...state, notifications: [...state.notifications, event.message] };
+    case 'extension_ui_response_sent':
+      return { ...state, uiRequests: state.uiRequests.filter((request) => request.id !== event.id) };
     default:
       return state;
   }

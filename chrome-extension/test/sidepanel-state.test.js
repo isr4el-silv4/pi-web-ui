@@ -9,6 +9,8 @@ describe('side panel state', () => {
       cookieAccessEnabled: false,
       storageAccessEnabled: false,
       messages: [],
+      uiRequests: [],
+      notifications: [],
       session: undefined,
     });
   });

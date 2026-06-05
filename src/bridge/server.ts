@@ -5,7 +5,7 @@ import { createSessionRegistry } from './session-registry.js';
 import { parseStartContext, type BridgeStartContext } from './start-context.js';
 import { attachWebSocketServer } from './websocket-server.js';
 
-export function createBridgeApp(options: { context: BridgeStartContext; pid?: number; sdkHost?: { create(options: { cwd: string; sessionPath?: string }): Promise<unknown> } }) {
+export function createBridgeApp(options: { context: BridgeStartContext; pid?: number; sdkHost?: { create(options: { cwd: string; sessionPath?: string }): Promise<unknown> }; ui?: { respond(response: { id: string; value: unknown }): boolean } }) {
   const clients = createBrowserClientRegistry();
   const sessions = createSessionRegistry();
   sessions.createSession(options.context);
@@ -47,6 +47,8 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
         case 'abort':
           clients.broadcast({ type: 'abort_received' });
           return sessions.getCurrentSession();
+        case 'extension_ui_response':
+          return { handled: options.ui?.respond({ id: command.id, value: command.value }) ?? false };
       }
     },
     get ready() {
