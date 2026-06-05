@@ -13,6 +13,10 @@ Phase 2 Pi extension launcher foundation:
 - Test-covered launcher command parsing
 - Test-covered bridge process spawning with terminal context defaults
 - Test-covered Chrome opener
+- Bridge start-context parsing
+- Bridge session registry
+- HTTP `/status`, `/open`, and `/command` endpoints
+- WebSocket command handling for the side panel
 
 ## Development
 
