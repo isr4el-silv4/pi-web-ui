@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pi Web UI</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Pi Web UI</h1>
+      <div id="status">Bridge offline</div>
+    </header>
+    <main>
+      <section id="offline">Start Pi Web UI from terminal Pi with: <code>/pi-web-ui start</code></section>
+      <section id="session" hidden>
+        <label>cwd <input id="cwd" placeholder="/path/to/project" /></label>
+        <button id="new-session">New session</button>
+        <label><input id="cookies" type="checkbox" /> cookies</label>
+        <label><input id="storage" type="checkbox" /> storage</label>
+        <select id="mode"><option>observe</option><option selected>debug</option><option>control</option></select>
+      </section>
+      <section id="messages"></section>
+    </main>
+    <form id="prompt-form">
+      <input id="prompt" placeholder="Ask Pi..." autocomplete="off" />
+      <button>Send</button>
+    </form>
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

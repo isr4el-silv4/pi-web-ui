@@ -17,6 +17,10 @@ Phase 2 Pi extension launcher foundation:
 - Bridge session registry
 - HTTP `/status`, `/open`, and `/command` endpoints
 - WebSocket command handling for the side panel
+- Chrome MV3 side panel MVP
+- Extension bridge WebSocket client
+- Initial browser tool executor for tabs/page/debugger operations
+- Bridge-side permission enforcement for browser tools
 
 ## Development
 
