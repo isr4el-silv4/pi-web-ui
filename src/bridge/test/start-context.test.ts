@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseStartContext } from './start-context.js';
+import { parseStartContext } from '../start-context.js';
 
 describe('bridge start context', () => {
   it('parses valid serialized terminal context', () => {

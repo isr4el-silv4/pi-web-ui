@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createBrowserToolExecutor } from './browser-tools.js';
+import { createBrowserToolExecutor } from '../browser-tools.js';
 
 describe('bridge browser tool executor', () => {
   it('forwards allowed tool calls to chrome extension clients', async () => {

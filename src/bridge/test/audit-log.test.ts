@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createAuditLog } from './audit-log.js';
+import { createAuditLog } from '../audit-log.js';
 
 describe('audit log', () => {
   it('records sensitive browser actions', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createNetworkCapture } from './network-capture.js';
+import { createNetworkCapture } from '../network-capture.js';
 
 describe('network capture', () => {
   it('captures requests and response bodies while enabled', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createExtensionUiAdapter } from './extension-ui-adapter.js';
+import { createExtensionUiAdapter } from '../extension-ui-adapter.js';
 
 describe('extension ui adapter', () => {
   it('broadcasts confirm requests and resolves responses', async () => {

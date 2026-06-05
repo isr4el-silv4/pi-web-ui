@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createBridgeApp } from './server.js';
+import { createBridgeApp } from '../server.js';
 
 describe('bridge app', () => {
   it('reports bridge status with active session and client count', () => {

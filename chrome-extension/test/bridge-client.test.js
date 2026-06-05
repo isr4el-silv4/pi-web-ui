@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createBridgeClient } from './bridge-client.js';
+import { createBridgeClient } from '../bridge-client.js';
 
 describe('extension bridge client', () => {
   it('connects to the local bridge websocket', () => {

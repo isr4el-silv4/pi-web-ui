@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createToolExecutor } from './tool-executor.js';
+import { createToolExecutor } from '../tool-executor.js';
 
 describe('chrome browser tool executor', () => {
   it('executes page text and screenshot tools', async () => {

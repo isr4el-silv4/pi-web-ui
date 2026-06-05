@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createBridgeProcessManager } from './bridge-process.js';
+import { createBridgeProcessManager } from '../bridge-process.js';
 
 describe('bridge process manager', () => {
   it('spawns the bridge runtime with serialized startup context', async () => {

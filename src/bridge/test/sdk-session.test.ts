@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createPiSdkAdapter, createSdkSessionHost } from './sdk-session.js';
+import { createPiSdkAdapter, createSdkSessionHost } from '../sdk-session.js';
 
 describe('sdk session host', () => {
   it('creates sessions through an injected SDK adapter', async () => {

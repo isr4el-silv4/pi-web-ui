@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateBrowserToolPermission } from './permissions.js';
+import { evaluateBrowserToolPermission } from '../permissions.js';
 
 const session = { id: 's1', cwd: '/', permissionMode: 'debug' as const, cookieAccessEnabled: false, storageAccessEnabled: false };
 

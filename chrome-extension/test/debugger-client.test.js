@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDebuggerClient } from './debugger-client.js';
+import { createDebuggerClient } from '../debugger-client.js';
 
 describe('debugger client', () => {
   it('gets current tab and sends CDP commands', async () => {

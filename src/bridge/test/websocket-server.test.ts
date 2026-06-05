@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { createServer } from 'node:http';
-import { createBridgeApp } from './server.js';
-import { attachWebSocketServer } from './websocket-server.js';
+import { createBridgeApp } from '../server.js';
+import { attachWebSocketServer } from '../websocket-server.js';
 
 const servers: Array<{ close: () => void }> = [];
 

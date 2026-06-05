@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createChromeOpener, getChromeCommandCandidates } from './chrome.js';
+import { createChromeOpener, getChromeCommandCandidates } from '../chrome.js';
 
 describe('chrome opener', () => {
   it('uses platform-specific command candidates', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createBrowserClientRegistry } from './browser-client.js';
+import { createBrowserClientRegistry } from '../browser-client.js';
 
 describe('browser client registry', () => {
   it('tracks connected clients and broadcasts JSON messages', () => {

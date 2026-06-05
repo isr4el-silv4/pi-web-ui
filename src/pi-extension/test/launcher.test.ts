@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createPiWebUiController, parsePiWebUiCommand } from './launcher.js';
+import { createPiWebUiController, parsePiWebUiCommand } from '../launcher.js';
 
 describe('pi-web-ui launcher command parsing', () => {
   it('parses supported commands', () => {

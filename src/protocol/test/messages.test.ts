@@ -7,7 +7,7 @@ import {
   isBrowserToolResponse,
   isClientCommand,
   isPermissionMode,
-} from './index.js';
+} from '../index.js';
 
 describe('protocol messages', () => {
   it('defines the default local bridge port', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runCli } from './cli.js';
+import { runCli } from '../cli.js';
 
 describe('pi-web-ui cli', () => {
   it('runs parsed launcher command with cwd context', async () => {

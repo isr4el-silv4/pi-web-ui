@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSessionRegistry } from './session-registry.js';
+import { createSessionRegistry } from '../session-registry.js';
 
 describe('session registry', () => {
   it('creates a session state with secure defaults', () => {

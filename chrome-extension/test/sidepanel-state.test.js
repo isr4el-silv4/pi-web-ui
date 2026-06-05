@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState, reduceSidePanelState } from './sidepanel-state.js';
+import { createInitialState, reduceSidePanelState } from '../sidepanel-state.js';
 
 describe('side panel state', () => {
   it('starts offline with secure defaults', () => {
