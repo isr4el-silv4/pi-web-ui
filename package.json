@@ -6,6 +6,11 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
   "scripts": {
     "test": "vitest run",
     "build": "tsc -p tsconfig.json",
@@ -13,6 +18,7 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.78.1",
+    "@sinclair/typebox": "^0.34.49",
     "ws": "^8.21.0"
   },
   "devDependencies": {

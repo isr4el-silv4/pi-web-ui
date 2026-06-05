@@ -1,7 +1,7 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import type { SessionStartOptions } from '../protocol/index.js';
+import type { JsonObject, JsonValue, SessionStartOptions } from '../protocol/index.js';
 
 export interface BridgeStartOptions extends SessionStartOptions {
   port: number;
@@ -23,6 +23,7 @@ export interface BridgeProcessManager {
   start(options: BridgeStartOptions): Promise<BridgeStartResult>;
   stop(): Promise<void>;
   status(): Promise<BridgeStatus>;
+  requestBrowserTool(tool: string, params: JsonObject): Promise<JsonValue | undefined>;
 }
 
 type Spawn = (command: string, args: string[], options: Parameters<typeof nodeSpawn>[2]) => Partial<ChildProcess>;
@@ -75,6 +76,21 @@ export function createBridgeProcessManager(deps: {
     },
     async status() {
       return statusProbe(43117);
+    },
+    async requestBrowserTool(tool, params) {
+      try {
+        const response = await fetch(`http://127.0.0.1:${43117}/browser-tool`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tool, params }),
+        });
+        if (!response.ok) {
+          throw new Error(`Bridge request failed: ${response.status}`);
+        }
+        return (await response.json()) as JsonValue;
+      } catch {
+        return undefined;
+      }
     },
   };
 }

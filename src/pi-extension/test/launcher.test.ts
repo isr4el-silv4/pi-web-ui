@@ -24,6 +24,7 @@ describe('pi-web-ui controller', () => {
       start: vi.fn(async () => ({ pid: 1234, port: 43117, alreadyRunning: false })),
       stop: vi.fn(),
       status: vi.fn(),
+      requestBrowserTool: vi.fn(),
     };
     const chrome = { open: vi.fn(async () => undefined) };
     const controller = createPiWebUiController({ bridge, chrome });
@@ -48,6 +49,7 @@ describe('pi-web-ui controller', () => {
         start: vi.fn(async () => ({ pid: 1234, port: 43117, alreadyRunning: true })),
         stop: vi.fn(),
         status: vi.fn(),
+        requestBrowserTool: vi.fn(),
       },
       chrome: { open: vi.fn(async () => undefined) },
     });
@@ -61,6 +63,7 @@ describe('pi-web-ui controller', () => {
         start: vi.fn(),
         stop: vi.fn(),
         status: vi.fn(async () => ({ running: true, pid: 1234, port: 43117 })),
+        requestBrowserTool: vi.fn(),
       },
       chrome: { open: vi.fn() },
     });

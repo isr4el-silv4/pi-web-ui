@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { isClientCommand, type ClientCommand } from '../protocol/index.js';
+import { isClientCommand, type ClientCommand, type JsonObject, type JsonValue } from '../protocol/index.js';
 import { createBrowserClientRegistry } from './browser-client.js';
+import { createBrowserToolExecutor } from './browser-tools.js';
 import { createSessionRegistry } from './session-registry.js';
 import { parseStartContext, type BridgeStartContext } from './start-context.js';
 import { attachWebSocketServer } from './websocket-server.js';
@@ -11,6 +12,14 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
   sessions.createSession(options.context);
   let sdkSession: unknown;
   let ready = options.sdkHost?.create({ cwd: options.context.cwd, sessionPath: options.context.sessionPath }).then((session) => { sdkSession = session; });
+
+  const transport = {
+    requestBrowserTool: async (tool: string, params: JsonObject) => {
+      const session = sessions.getCurrentSession() ?? { id: 'default', cwd: options.context.cwd, permissionMode: options.context.permissionMode, cookieAccessEnabled: options.context.cookieAccessEnabled, storageAccessEnabled: options.context.storageAccessEnabled };
+      const executor = createBrowserToolExecutor(clients, session);
+      return executor.execute(tool, params);
+    },
+  };
 
   const app = {
     status() {
@@ -51,6 +60,9 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           return { handled: options.ui?.respond({ id: command.id, value: command.value }) ?? false };
       }
     },
+    async executeBrowserTool(tool: string, params: JsonObject): Promise<JsonValue | undefined> {
+      return transport.requestBrowserTool(tool, params);
+    },
     get ready() {
       return ready;
     },
@@ -82,6 +94,16 @@ export function createHttpServer(context: BridgeStartContext) {
       const parsed = JSON.parse(await readBody(request)) as unknown;
       if (!isClientCommand(parsed)) return sendJson(response, 400, { error: 'Invalid client command' });
       return sendJson(response, 200, app.handleClientCommand(parsed));
+    }
+    if (request.method === 'POST' && request.url === '/browser-tool') {
+      const { tool, params } = JSON.parse(await readBody(request)) as { tool?: string; params?: JsonObject };
+      if (!tool) return sendJson(response, 400, { error: 'Missing tool name' });
+      try {
+        const result = await app.executeBrowserTool(tool, params ?? {});
+        return sendJson(response, 200, result);
+      } catch (error) {
+        return sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+      }
     }
     return sendJson(response, 404, { error: 'Not found' });
   });
