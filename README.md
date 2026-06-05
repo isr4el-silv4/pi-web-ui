@@ -25,6 +25,9 @@ Phase 2 Pi extension launcher foundation:
 - Extension UI adapter for confirm/input/notify flows
 - Audit log primitive for sensitive browser actions
 - SDK session host adapter seam
+- Pi SDK adapter using `DefaultResourceLoader`, extension/skill loading hooks, and browser custom tool definitions
+- CLI binary entrypoint for local `/pi-web-ui` style command integration
+- Side panel execution path for bridge `browser_tool_request` messages
 
 ## Development
 

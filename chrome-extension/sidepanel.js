@@ -1,5 +1,6 @@
 import { createBridgeClient } from './bridge-client.js';
 import { createInitialState, reduceSidePanelState } from './sidepanel-state.js';
+import { createToolExecutor } from './tool-executor.js';
 
 let state = createInitialState();
 let client;
@@ -39,7 +40,8 @@ function dispatch(event) {
   render();
 }
 
-client = createBridgeClient({ onEvent: dispatch });
+const toolExecutor = createToolExecutor();
+client = createBridgeClient({ onEvent: dispatch, executeTool: (tool, params) => toolExecutor.execute(tool, params) });
 client.connect();
 
 els.form.addEventListener('submit', (event) => {

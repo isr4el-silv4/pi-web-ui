@@ -33,6 +33,21 @@ describe('extension bridge client', () => {
     expect(sent).toEqual([JSON.stringify({ type: 'prompt', message: 'Check console errors' })]);
   });
 
+  it('executes browser tool requests and responds to bridge', async () => {
+    const listeners = {};
+    const sent = [];
+    class FakeWebSocket {
+      constructor() { this.readyState = 1; }
+      addEventListener(name, handler) { listeners[name] = handler; }
+      send(message) { sent.push(message); }
+      close() {}
+    }
+    const client = createBridgeClient({ WebSocketCtor: FakeWebSocket, port: 43117, executeTool: async () => ({ text: 'ok' }) });
+    client.connect();
+    await listeners.message({ data: JSON.stringify({ id: 'r1', type: 'browser_tool_request', tool: 'page.getText', params: {} }) });
+    expect(sent).toEqual([JSON.stringify({ id: 'r1', type: 'browser_tool_response', success: true, data: { text: 'ok' } })]);
+  });
+
   it('notifies lifecycle and parsed messages', () => {
     const listeners = {};
     class FakeWebSocket {
