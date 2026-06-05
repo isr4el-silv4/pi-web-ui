@@ -5,12 +5,14 @@ import { createSessionRegistry } from './session-registry.js';
 import { parseStartContext, type BridgeStartContext } from './start-context.js';
 import { attachWebSocketServer } from './websocket-server.js';
 
-export function createBridgeApp(options: { context: BridgeStartContext; pid?: number }) {
+export function createBridgeApp(options: { context: BridgeStartContext; pid?: number; sdkHost?: { create(options: { cwd: string; sessionPath?: string }): Promise<unknown> } }) {
   const clients = createBrowserClientRegistry();
   const sessions = createSessionRegistry();
   sessions.createSession(options.context);
+  let sdkSession: unknown;
+  let ready = options.sdkHost?.create({ cwd: options.context.cwd, sessionPath: options.context.sessionPath }).then((session) => { sdkSession = session; });
 
-  return {
+  const app = {
     status() {
       return {
         running: true,
@@ -18,14 +20,21 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
         port: options.context.port,
         browserClients: clients.count(),
         session: sessions.getCurrentSession(),
+        sdkSession,
       };
     },
     handleClientCommand(command: ClientCommand) {
       switch (command.type) {
-        case 'new_session':
-          return sessions.createSession({ cwd: command.cwd });
-        case 'resume_session':
-          return sessions.resumeSession(command.sessionPath, { cwd: options.context.cwd });
+        case 'new_session': {
+          const session = sessions.createSession({ cwd: command.cwd });
+          ready = options.sdkHost?.create({ cwd: command.cwd }).then((created) => { sdkSession = created; });
+          return session;
+        }
+        case 'resume_session': {
+          const session = sessions.resumeSession(command.sessionPath, { cwd: options.context.cwd });
+          ready = options.sdkHost?.create({ cwd: options.context.cwd, sessionPath: command.sessionPath }).then((created) => { sdkSession = created; });
+          return session;
+        }
         case 'set_permission_mode':
           return sessions.setPermissionMode(command.mode);
         case 'set_cookie_access':
@@ -40,7 +49,11 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           return sessions.getCurrentSession();
       }
     },
+    get ready() {
+      return ready;
+    },
   };
+  return app;
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown) {

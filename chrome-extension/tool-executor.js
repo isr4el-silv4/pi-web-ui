@@ -1,11 +1,13 @@
 import { createDebuggerClient } from './debugger-client.js';
 import { createConsoleCapture } from './console-capture.js';
 import { createNetworkCapture } from './network-capture.js';
+import { attachDebuggerEventCapture } from './debugger-events.js';
 
 export function createToolExecutor(chromeApi = chrome, captures = {}) {
   const debuggerClient = createDebuggerClient(chromeApi);
   const consoleCapture = captures.consoleCapture ?? createConsoleCapture();
   const networkCapture = captures.networkCapture ?? createNetworkCapture();
+  if (!captures.skipAttachEvents && chromeApi.debugger?.onEvent) attachDebuggerEventCapture(chromeApi, { consoleCapture, networkCapture });
 
   async function currentTabId() {
     const tab = await debuggerClient.getCurrentTab();
