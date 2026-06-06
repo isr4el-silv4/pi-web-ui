@@ -30,6 +30,9 @@ type Spawn = (command: string, args: string[], options: Parameters<typeof nodeSp
 
 type StatusProbe = (port: number) => Promise<BridgeStatus>;
 
+const READY_POLL_INTERVAL_MS = 200;
+const READY_TIMEOUT_MS = 10000;
+
 export function defaultBridgeEntryPath(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   return resolve(here, '../bridge/server.js');
@@ -46,14 +49,28 @@ async function defaultStatusProbe(port: number): Promise<BridgeStatus> {
   }
 }
 
+async function waitForBridgeReady(statusProbe: StatusProbe, port: number, timeoutMs: number, intervalMs: number): Promise<BridgeStatus> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const status = await statusProbe(port);
+    if (status.running) return status;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(`Bridge did not become ready on port ${port} within ${timeoutMs}ms`);
+}
+
 export function createBridgeProcessManager(deps: {
   spawn?: Spawn;
   statusProbe?: StatusProbe;
   bridgeEntryPath?: string;
+  readyTimeoutMs?: number;
+  readyPollIntervalMs?: number;
 } = {}): BridgeProcessManager {
   const spawn = deps.spawn ?? nodeSpawn;
   const statusProbe = deps.statusProbe ?? defaultStatusProbe;
   const bridgeEntryPath = deps.bridgeEntryPath ?? defaultBridgeEntryPath();
+  const readyTimeoutMs = deps.readyTimeoutMs ?? READY_TIMEOUT_MS;
+  const readyPollIntervalMs = deps.readyPollIntervalMs ?? READY_POLL_INTERVAL_MS;
 
   return {
     async start(options) {
@@ -69,7 +86,9 @@ export function createBridgeProcessManager(deps: {
         stdio: 'ignore',
       }) as ChildProcess;
       child.unref?.();
-      return { pid: child.pid, port: options.port, alreadyRunning: false };
+
+      const ready = await waitForBridgeReady(statusProbe, options.port, readyTimeoutMs, readyPollIntervalMs);
+      return { pid: ready.pid ?? child.pid, port: ready.port ?? options.port, alreadyRunning: false };
     },
     async stop() {
       // Implemented in bridge MVP when a shutdown endpoint exists.
