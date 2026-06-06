@@ -107,6 +107,8 @@ export function createBridgeProcessManager(deps: {
       });
 
       const ready = await waitForBridgeReady(statusProbe, options.port, readyTimeoutMs, readyPollIntervalMs, stderr);
+      // Unref stderr so it doesn't keep the CLI process alive after bridge is ready
+      (child.stderr as any)?.unref?.();
       return { pid: ready.pid ?? child.pid, port: ready.port ?? options.port, alreadyRunning: false };
     },
     async stop() {

@@ -33,10 +33,9 @@ function spawnChild(command: string, url: string, spawn: Spawn): Promise<void> {
       reject(err.code === 'ENOENT' ? new Error(`ENOENT: ${command}`) : error);
     });
 
-    child.on('exit', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`${command} exited with code ${code}`));
-    });
+    // Fire-and-forget: resolve immediately after spawn succeeds.
+    // Browser launchers like xdg-open may not emit 'exit' reliably.
+    setImmediate(resolve);
   });
 }
 
