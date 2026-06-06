@@ -1,4 +1,5 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import type { JsonObject, JsonValue, SessionStartOptions } from '../protocol/index.js';
@@ -35,7 +36,11 @@ const READY_TIMEOUT_MS = 10000;
 
 export function defaultBridgeEntryPath(): string {
   const here = dirname(fileURLToPath(import.meta.url));
-  return resolve(here, '../bridge/server.js');
+  const distPath = resolve(here, '../bridge/server.js');
+  if (existsSync(distPath)) return distPath;
+  const srcPath = resolve(here, '../../src/bridge/server.ts');
+  if (existsSync(srcPath)) return resolve(dirname(srcPath), '../dist/bridge/server.js');
+  return distPath;
 }
 
 async function defaultStatusProbe(port: number): Promise<BridgeStatus> {

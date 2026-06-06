@@ -164,4 +164,10 @@ describe('bridge process manager', () => {
     await expect(manager.stop()).resolves.toBeUndefined();
     expect(stopFn).not.toHaveBeenCalled();
   });
+
+  it('resolves bridge entry path correctly from src or dist', async () => {
+    const { defaultBridgeEntryPath } = await import('../bridge-process.js');
+    const path = defaultBridgeEntryPath();
+    expect(path).toContain('bridge/server.js');
+  });
 });
