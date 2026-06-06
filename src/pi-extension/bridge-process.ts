@@ -66,12 +66,14 @@ export function createBridgeProcessManager(deps: {
   bridgeEntryPath?: string;
   readyTimeoutMs?: number;
   readyPollIntervalMs?: number;
+  stopFn?: () => Promise<void>;
 } = {}): BridgeProcessManager {
   const spawn = deps.spawn ?? nodeSpawn;
   const statusProbe = deps.statusProbe ?? defaultStatusProbe;
   const bridgeEntryPath = deps.bridgeEntryPath ?? defaultBridgeEntryPath();
   const readyTimeoutMs = deps.readyTimeoutMs ?? READY_TIMEOUT_MS;
   const readyPollIntervalMs = deps.readyPollIntervalMs ?? READY_POLL_INTERVAL_MS;
+  const stopFn = deps.stopFn ?? defaultStopFn;
 
   return {
     async start(options) {
@@ -103,7 +105,9 @@ export function createBridgeProcessManager(deps: {
       return { pid: ready.pid ?? child.pid, port: ready.port ?? options.port, alreadyRunning: false };
     },
     async stop() {
-      // Implemented in bridge MVP when a shutdown endpoint exists.
+      const status = await statusProbe(43117);
+      if (!status.running) return;
+      await stopFn();
     },
     async status() {
       return statusProbe(43117);
@@ -124,4 +128,12 @@ export function createBridgeProcessManager(deps: {
       }
     },
   };
+}
+
+async function defaultStopFn(): Promise<void> {
+  try {
+    await fetch('http://127.0.0.1:43117/stop', { method: 'POST' });
+  } catch {
+    // Bridge may already be down
+  }
 }

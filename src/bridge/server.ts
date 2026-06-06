@@ -90,6 +90,11 @@ export function createHttpServer(context: BridgeStartContext) {
       response.end('Pi Web UI bridge is running. Open the Chrome extension side panel to continue.');
       return;
     }
+    if (request.method === 'POST' && request.url === '/stop') {
+      sendJson(response, 200, { stopped: true });
+      server.close(() => process.exit(0));
+      return;
+    }
     if (request.method === 'POST' && request.url === '/command') {
       const parsed = JSON.parse(await readBody(request)) as unknown;
       if (!isClientCommand(parsed)) return sendJson(response, 400, { error: 'Invalid client command' });

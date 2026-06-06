@@ -138,4 +138,30 @@ describe('bridge process manager', () => {
       port: 43117,
     })).rejects.toThrow('Bridge stderr:');
   }, 5000);
+
+  it('stops the bridge by calling /stop endpoint', async () => {
+    let running = true;
+    const manager = createBridgeProcessManager({
+      spawn: vi.fn(() => mockChild(777)),
+      statusProbe: vi.fn(async () => ({ running, pid: 777, port: 43117 })),
+      bridgeEntryPath: '/ext/dist/bridge/server.js',
+      stopFn: vi.fn(async () => { running = false; }),
+    });
+
+    await manager.stop();
+    expect(running).toBe(false);
+  });
+
+  it('does not throw when stopping a bridge that is already stopped', async () => {
+    const stopFn = vi.fn(async () => {});
+    const manager = createBridgeProcessManager({
+      spawn: vi.fn(() => mockChild(777)),
+      statusProbe: vi.fn(async () => ({ running: false })),
+      bridgeEntryPath: '/ext/dist/bridge/server.js',
+      stopFn,
+    });
+
+    await expect(manager.stop()).resolves.toBeUndefined();
+    expect(stopFn).not.toHaveBeenCalled();
+  });
 });
