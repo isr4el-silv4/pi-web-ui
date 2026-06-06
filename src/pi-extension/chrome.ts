@@ -1,4 +1,4 @@
-import { spawn as nodeSpawn } from 'node:child_process';
+import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process';
 
 export interface ChromeOpenOptions {
   port: number;
@@ -9,12 +9,12 @@ export interface ChromeOpener {
 }
 
 type Platform = NodeJS.Platform;
-type Spawn = (command: string, args: string[], options: Parameters<typeof nodeSpawn>[2]) => { unref?: () => void };
+type Spawn = (command: string, args: string[], options: Parameters<typeof nodeSpawn>[2]) => ChildProcess;
 
 export function getChromeCommandCandidates(platform: Platform): string[] {
   if (platform === 'darwin') return ['open'];
   if (platform === 'win32') return ['cmd'];
-  return ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'];
+  return ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'vivaldi-stable', 'vivaldi', 'xdg-open'];
 }
 
 function argsFor(command: string, url: string): string[] {
@@ -23,16 +23,45 @@ function argsFor(command: string, url: string): string[] {
   return [url];
 }
 
+function spawnChild(command: string, url: string, spawn: Spawn): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, argsFor(command, url), { detached: true, stdio: 'ignore' });
+    child.unref?.();
+
+    child.on('error', (error) => {
+      const err = error as NodeJS.ErrnoException;
+      reject(err.code === 'ENOENT' ? new Error(`ENOENT: ${command}`) : error);
+    });
+
+    child.on('exit', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${command} exited with code ${code}`));
+    });
+  });
+}
+
 export function createChromeOpener(deps: { spawn?: Spawn; platform?: Platform } = {}): ChromeOpener {
   const spawn = deps.spawn ?? nodeSpawn;
   const platform = deps.platform ?? process.platform;
 
   return {
     async open({ port }) {
-      const command = getChromeCommandCandidates(platform)[0];
+      const candidates = getChromeCommandCandidates(platform);
       const url = `http://localhost:${port}/open`;
-      const child = spawn(command, argsFor(command, url), { detached: true, stdio: 'ignore' });
-      child.unref?.();
+
+      for (const command of candidates) {
+        try {
+          await spawnChild(command, url, spawn);
+          return;
+        } catch (error: unknown) {
+          const msg = (error as Error).message ?? '';
+          if (!msg.startsWith('ENOENT:')) throw error;
+        }
+      }
+
+      throw new Error(
+        `Chrome browser not found. Tried: ${candidates.join(', ')}. Please install Google Chrome or Chromium.`,
+      );
     },
   };
 }
