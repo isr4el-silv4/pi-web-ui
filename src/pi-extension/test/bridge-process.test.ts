@@ -1,16 +1,26 @@
+import type { ChildProcess } from 'node:child_process';
 import { describe, expect, it, vi } from 'vitest';
 import { createBridgeProcessManager } from '../bridge-process.js';
 
+function mockChild(pid: number): ChildProcess {
+  return {
+    pid,
+    unref: vi.fn(),
+    stderr: { on: vi.fn() },
+    on: vi.fn(),
+  } as unknown as ChildProcess;
+}
+
 describe('bridge process manager', () => {
   it('spawns the bridge runtime with serialized startup context', async () => {
-    const spawn = vi.fn(() => ({ pid: 777, unref: vi.fn() }));
+    const spawn = vi.fn(() => mockChild(777));
     let probeCallCount = 0;
     const manager = createBridgeProcessManager({
       spawn,
       statusProbe: vi.fn(async () => {
         probeCallCount++;
-        if (probeCallCount === 1) return { running: false }; // initial check
-        return { running: true, pid: 777, port: 43117 }; // ready after spawn
+        if (probeCallCount === 1) return { running: false };
+        return { running: true, pid: 777, port: 43117 };
       }),
       bridgeEntryPath: '/ext/dist/bridge/server.js',
     });
@@ -35,7 +45,7 @@ describe('bridge process manager', () => {
           port: 43117,
         }),
       }),
-      stdio: 'ignore',
+      stdio: ['ignore', 'ignore', 'pipe'],
     });
     expect(result).toEqual({ pid: 777, port: 43117, alreadyRunning: false });
   });
@@ -53,15 +63,15 @@ describe('bridge process manager', () => {
   });
 
   it('polls until the bridge is ready before returning', async () => {
-    const spawn = vi.fn(() => ({ pid: 999, unref: vi.fn() }));
+    const spawn = vi.fn(() => mockChild(999));
     let probeCallCount = 0;
     const manager = createBridgeProcessManager({
       spawn,
       statusProbe: vi.fn(async () => {
         probeCallCount++;
-        if (probeCallCount === 1) return { running: false }; // initial check
-        if (probeCallCount <= 3) return { running: false }; // not ready yet
-        return { running: true, pid: 999, port: 43117 }; // ready on 4th call
+        if (probeCallCount === 1) return { running: false };
+        if (probeCallCount <= 3) return { running: false };
+        return { running: true, pid: 999, port: 43117 };
       }),
       bridgeEntryPath: '/ext/dist/bridge/server.js',
       readyPollIntervalMs: 10,
@@ -80,7 +90,7 @@ describe('bridge process manager', () => {
   });
 
   it('throws if the bridge never becomes ready', async () => {
-    const spawn = vi.fn(() => ({ pid: 999, unref: vi.fn() }));
+    const spawn = vi.fn(() => mockChild(999));
     const manager = createBridgeProcessManager({
       spawn,
       statusProbe: vi.fn(async () => ({ running: false })),
@@ -96,5 +106,36 @@ describe('bridge process manager', () => {
       storageAccessEnabled: false,
       port: 43117,
     })).rejects.toThrow('Bridge did not become ready');
+  }, 5000);
+
+  it('includes stderr in error when bridge fails to start', async () => {
+    let stderrCallback: ((data: Buffer) => void) | undefined;
+    const spawn = vi.fn(() => {
+      const child = mockChild(999);
+      (child.stderr as any).on = vi.fn((_event: string, cb: (data: Buffer) => void) => {
+        stderrCallback = cb;
+      });
+      return child;
+    });
+    const manager = createBridgeProcessManager({
+      spawn,
+      statusProbe: vi.fn(async () => {
+        if (stderrCallback) {
+          stderrCallback(Buffer.from('Error: Cannot find module "ws"'));
+        }
+        return { running: false };
+      }),
+      bridgeEntryPath: '/ext/dist/bridge/server.js',
+      readyTimeoutMs: 200,
+      readyPollIntervalMs: 50,
+    });
+
+    await expect(manager.start({
+      cwd: '/project',
+      permissionMode: 'debug',
+      cookieAccessEnabled: false,
+      storageAccessEnabled: false,
+      port: 43117,
+    })).rejects.toThrow('Bridge stderr:');
   }, 5000);
 });

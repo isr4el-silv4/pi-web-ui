@@ -49,14 +49,15 @@ async function defaultStatusProbe(port: number): Promise<BridgeStatus> {
   }
 }
 
-async function waitForBridgeReady(statusProbe: StatusProbe, port: number, timeoutMs: number, intervalMs: number): Promise<BridgeStatus> {
+async function waitForBridgeReady(statusProbe: StatusProbe, port: number, timeoutMs: number, intervalMs: number, stderr: string[]): Promise<BridgeStatus> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const status = await statusProbe(port);
     if (status.running) return status;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-  throw new Error(`Bridge did not become ready on port ${port} within ${timeoutMs}ms`);
+  const errorDetail = stderr.length > 0 ? `\nBridge stderr: ${stderr.join('\n').trim()}` : '';
+  throw new Error(`Bridge did not become ready on port ${port} within ${timeoutMs}ms.${errorDetail}`);
 }
 
 export function createBridgeProcessManager(deps: {
@@ -79,15 +80,26 @@ export function createBridgeProcessManager(deps: {
         return { pid: existing.pid, port: existing.port ?? options.port, alreadyRunning: true };
       }
 
+      const stderr: string[] = [];
       const child = spawn(process.execPath, [bridgeEntryPath], {
         cwd: options.cwd,
         detached: true,
         env: { ...process.env, PI_WEB_UI_START_CONTEXT: JSON.stringify(options) },
-        stdio: 'ignore',
+        stdio: ['ignore', 'ignore', 'pipe'],
       }) as ChildProcess;
       child.unref?.();
 
-      const ready = await waitForBridgeReady(statusProbe, options.port, readyTimeoutMs, readyPollIntervalMs);
+      if (child.stderr) {
+        child.stderr.on('data', (data) => {
+          stderr.push(data.toString());
+        });
+      }
+
+      child.on('error', (error) => {
+        stderr.push(String(error));
+      });
+
+      const ready = await waitForBridgeReady(statusProbe, options.port, readyTimeoutMs, readyPollIntervalMs, stderr);
       return { pid: ready.pid ?? child.pid, port: ready.port ?? options.port, alreadyRunning: false };
     },
     async stop() {
