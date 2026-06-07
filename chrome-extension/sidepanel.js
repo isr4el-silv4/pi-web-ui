@@ -1,6 +1,7 @@
 import { createBridgeClient } from './bridge-client.js';
 import { createInitialState, reduceSidePanelState } from './sidepanel-state.js';
 import { createToolExecutor } from './tool-executor.js';
+import { resolveCwdPath } from './cwd-picker.js';
 
 let state = createInitialState();
 let client;
@@ -14,12 +15,15 @@ const els = {
   notifications: document.querySelector('#notifications'),
   form: document.querySelector('#prompt-form'),
   prompt: document.querySelector('#prompt'),
-  cwd: document.querySelector('#cwd'),
+  cwdDisplay: document.querySelector('#cwd-display'),
+  cwdPicker: document.querySelector('#cwd-picker'),
   newSession: document.querySelector('#new-session'),
   cookies: document.querySelector('#cookies'),
   storage: document.querySelector('#storage'),
   mode: document.querySelector('#mode'),
 };
+
+let selectedCwd = null;
 
 function render() {
   els.status.textContent = state.bridgeOnline ? `Bridge online · ${state.permissionMode}` : 'Bridge offline';
@@ -70,7 +74,17 @@ els.form.addEventListener('submit', (event) => {
   els.prompt.value = '';
 });
 
-els.newSession.addEventListener('click', () => client.sendCommand({ type: 'new_session', cwd: els.cwd.value || '/' }));
+els.cwdPicker.addEventListener('click', async () => {
+  try {
+    const dirHandle = await window.showDirectoryPicker();
+    const path = await resolveCwdPath(dirHandle);
+    selectedCwd = path;
+    els.cwdDisplay.textContent = path;
+  } catch {
+    // User cancelled or API not available
+  }
+});
+els.newSession.addEventListener('click', () => client.sendCommand({ type: 'new_session', cwd: selectedCwd || '/' }));
 els.cookies.addEventListener('change', () => client.sendCommand({ type: 'set_cookie_access', enabled: els.cookies.checked }));
 els.storage.addEventListener('change', () => client.sendCommand({ type: 'set_storage_access', enabled: els.storage.checked }));
 els.mode.addEventListener('change', () => client.sendCommand({ type: 'set_permission_mode', mode: els.mode.value }));
