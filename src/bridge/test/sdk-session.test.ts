@@ -27,4 +27,49 @@ describe('sdk session host', () => {
     expect(createdTools).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'browser_get_console_logs' })]));
     expect(session).toMatchObject({ id: 'agent-session' });
   });
+
+  it('extracts session from { session } wrapper returned by Pi SDK', async () => {
+    const createdTools: unknown[] = [];
+    const sdk = {
+      DefaultResourceLoader: vi.fn(function ResourceLoader(this: { cwd: string }, options: { cwd: string }) { this.cwd = options.cwd; }),
+      createAgentSession: vi.fn(async () => ({
+        // Pi SDK returns { session } not the session directly
+        session: { id: 'real-session', prompt: vi.fn(), subscribe: vi.fn() },
+      })),
+      defineTool: vi.fn((tool) => { createdTools.push(tool); return tool; }),
+      discoverAndLoadExtensions: vi.fn(async () => []),
+      loadSkills: vi.fn(async () => []),
+    };
+    const adapter = createPiSdkAdapter({ sdk, browserToolExecutor: { execute: vi.fn() } });
+
+    const session = await adapter.createSession({ cwd: '/project' });
+
+    // Should extract the inner session, not return the wrapper
+    expect(session).toMatchObject({ id: 'real-session' });
+    expect((session as any).prompt).toBeDefined();
+    expect((session as any).subscribe).toBeDefined();
+  });
+
+  it('uses session directly when not wrapped in { session }', async () => {
+    const createdTools: unknown[] = [];
+    const sdk = {
+      DefaultResourceLoader: vi.fn(function ResourceLoader(this: { cwd: string }, options: { cwd: string }) { this.cwd = options.cwd; }),
+      createAgentSession: vi.fn(async () => ({
+        // Some SDK versions may return session directly
+        id: 'direct-session',
+        prompt: vi.fn(),
+        subscribe: vi.fn(),
+      })),
+      defineTool: vi.fn((tool) => { createdTools.push(tool); return tool; }),
+      discoverAndLoadExtensions: vi.fn(async () => []),
+      loadSkills: vi.fn(async () => []),
+    };
+    const adapter = createPiSdkAdapter({ sdk, browserToolExecutor: { execute: vi.fn() } });
+
+    const session = await adapter.createSession({ cwd: '/project' });
+
+    // Should use the session directly
+    expect(session).toMatchObject({ id: 'direct-session' });
+    expect((session as any).prompt).toBeDefined();
+  });
 });

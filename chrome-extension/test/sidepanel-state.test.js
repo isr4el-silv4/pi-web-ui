@@ -12,12 +12,20 @@ describe('side panel state', () => {
       uiRequests: [],
       notifications: [],
       session: undefined,
+      sending: false,
+      sendError: null,
     });
   });
 
   it('marks bridge online when connected', () => {
     const state = reduceSidePanelState(createInitialState(), { type: 'bridge_connected' });
     expect(state.bridgeOnline).toBe(true);
+  });
+
+  it('clears send error when bridge connects', () => {
+    const withError = reduceSidePanelState(createInitialState(), { type: 'prompt_error', message: 'test', error: 'SDK not ready' });
+    const connected = reduceSidePanelState(withError, { type: 'bridge_connected' });
+    expect(connected.sendError).toBeNull();
   });
 
   it('updates session, mode, and toggles from session_state messages', () => {
@@ -51,6 +59,26 @@ describe('side panel state', () => {
     ]);
   });
 
+  it('sets sending=true when user sends a message', () => {
+    const state = reduceSidePanelState(createInitialState(), { type: 'user_message', text: 'Hi' });
+    expect(state.sending).toBe(true);
+    expect(state.sendError).toBeNull();
+  });
+
+  it('sets sending=false when assistant responds', () => {
+    const sending = reduceSidePanelState(createInitialState(), { type: 'user_message', text: 'Hi' });
+    const responded = reduceSidePanelState(sending, { type: 'assistant_message', text: 'Hello' });
+    expect(responded.sending).toBe(false);
+    expect(responded.sendError).toBeNull();
+  });
+
+  it('sets sending=false and sendError when prompt fails', () => {
+    const sending = reduceSidePanelState(createInitialState(), { type: 'user_message', text: 'Hi' });
+    const errored = reduceSidePanelState(sending, { type: 'prompt_error', message: 'Hi', error: 'SDK not ready' });
+    expect(errored.sending).toBe(false);
+    expect(errored.sendError).toBe('SDK not ready');
+  });
+
   it('ignores prompt_received acknowledgement to avoid duplicating user message', () => {
     const withUser = reduceSidePanelState(createInitialState(), { type: 'user_message', text: 'Hi' });
     const withAck = reduceSidePanelState(withUser, { type: 'prompt_received', message: 'Hi' });
@@ -66,5 +94,29 @@ describe('side panel state', () => {
     });
 
     expect(state.messages).toEqual([{ role: 'assistant', text: 'Pi response here' }]);
+  });
+
+  it('adds bridge_error as a notification', () => {
+    const state = reduceSidePanelState(createInitialState(), {
+      type: 'bridge_error',
+      error: 'WebSocket connection error',
+    });
+    expect(state.notifications).toEqual(['Connection error: WebSocket connection error']);
+  });
+
+  it('prompt_sent clears any pending send error', () => {
+    const withError = reduceSidePanelState(createInitialState(), { type: 'prompt_error', message: 'test', error: 'fail' });
+    const sent = reduceSidePanelState(withError, { type: 'prompt_sent', message: 'test' });
+    expect(sent.sendError).toBeNull();
+  });
+
+  it('adds generic error from bridge as a notification and stops sending', () => {
+    const sending = reduceSidePanelState(createInitialState(), { type: 'user_message', text: 'Hi' });
+    const errored = reduceSidePanelState(sending, {
+      type: 'error',
+      error: 'Command handling failed: something went wrong',
+    });
+    expect(errored.notifications).toEqual(['Error: Command handling failed: something went wrong']);
+    expect(errored.sending).toBe(false);
   });
 });

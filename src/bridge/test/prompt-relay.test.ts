@@ -24,8 +24,14 @@ function collectMessages(ws: WebSocket, count: number): Promise<Record<string, u
   });
 }
 
+function waitForMessage(ws: WebSocket): Promise<Record<string, unknown>> {
+  return new Promise((resolve) => {
+    ws.once('message', (data) => resolve(JSON.parse(data.toString()) as Record<string, unknown>));
+  });
+}
+
 describe('bridge prompt relay', () => {
-  it('forwards prompt to SDK session and returns session state', async () => {
+  it('forwards prompt to SDK session, sends prompt_sent on success', async () => {
     const promptCalls: Array<{ text: string }> = [];
     const sdkHost = {
       create: vi.fn().mockResolvedValue({
@@ -51,19 +57,23 @@ describe('bridge prompt relay', () => {
     servers.push(ws);
     await new Promise<void>((resolve) => ws.once('open', resolve));
 
-    // Expect 2 messages: prompt_received broadcast + session_state response
-    const messagesPromise = collectMessages(ws, 2);
+    // Wait for SDK to be ready
+    await app.ready;
+
+    // Collect all 3 messages: prompt_received + session_state (sync) + prompt_sent (async)
+    const allMessages = collectMessages(ws, 3);
     ws.send(JSON.stringify({ type: 'prompt', message: 'Hello Pi' }));
 
-    const messages = await messagesPromise;
-    expect(messages).toHaveLength(2);
+    const messages = await allMessages;
+    expect(messages).toHaveLength(3);
     expect(messages[0]).toMatchObject({ type: 'prompt_received', message: 'Hello Pi' });
     expect(messages[1]).toMatchObject({ type: 'session_state' });
+    expect(messages[2]).toMatchObject({ type: 'prompt_sent', message: 'Hello Pi' });
     expect(promptCalls).toEqual([{ text: 'Hello Pi' }]);
   });
 
   it('relays assistant messages from SDK session to websocket client', async () => {
-    let subscribeCallback: ((event: { type: string; text?: string }) => void) | undefined;
+    let subscribeCallback: ((event: Record<string, unknown>) => void) | undefined;
     const sdkHost = {
       create: vi.fn().mockResolvedValue({
         prompt: vi.fn().mockResolvedValue(undefined),
@@ -89,19 +99,24 @@ describe('bridge prompt relay', () => {
     servers.push(ws);
     await new Promise<void>((resolve) => ws.once('open', resolve));
 
-    // Send a prompt to establish connection and consume initial messages
-    const initialMessages = collectMessages(ws, 2);
+    // Wait for SDK to be ready
+    await app.ready;
+
+    // Set up listener for async prompt_sent BEFORE sending
+    const asyncSent = waitForMessage(ws);
+    // Send a prompt and consume sync messages
+    const syncMessages = collectMessages(ws, 2);
     ws.send(JSON.stringify({ type: 'prompt', message: 'Hi' }));
-    await initialMessages;
+    await syncMessages;
+    // Consume the async prompt_sent
+    await asyncSent;
 
     // Now listen for assistant message relay
-    const assistantMessage = new Promise<Record<string, unknown>>((resolve) => {
-      ws.once('message', (data) => resolve(JSON.parse(data.toString()) as Record<string, unknown>));
-    });
+    const assistantMessage = waitForMessage(ws);
 
-    // Trigger an assistant_message event from the SDK session
+    // Trigger a message_end event from the SDK session (assistant response)
     if (subscribeCallback) {
-      subscribeCallback({ type: 'assistant_message', text: 'Hello from Pi!' });
+      subscribeCallback({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Hello from Pi!' }] } });
     }
 
     await expect(assistantMessage).resolves.toMatchObject({
@@ -110,11 +125,20 @@ describe('bridge prompt relay', () => {
     });
   });
 
-  it('handles prompt when SDK session is not yet ready', async () => {
+  it('queues prompt when SDK is not yet ready, forwards it once ready', async () => {
+    let promptCalls: Array<{ text: string }> = [];
+    let resolveSdk: () => void;
+    const sdkReady = new Promise<void>((resolve) => { resolveSdk = resolve; });
+
     const sdkHost = {
-      create: vi.fn().mockResolvedValue({
-        prompt: vi.fn().mockResolvedValue(undefined),
-      }),
+      create: vi.fn().mockImplementation(() =>
+        sdkReady.then(() => ({
+          prompt: (text: string) => {
+            promptCalls.push({ text });
+            return Promise.resolve();
+          },
+        }))
+      ),
     };
 
     const app = createBridgeApp({
@@ -132,13 +156,59 @@ describe('bridge prompt relay', () => {
     servers.push(ws);
     await new Promise<void>((resolve) => ws.once('open', resolve));
 
-    // Send prompt before SDK is ready - should still get prompt_received + session_state
-    const messagesPromise = collectMessages(ws, 2);
+    // SDK is NOT ready yet - send prompt (should be queued)
+    // prompt_received + session_state arrive immediately
+    const syncMessages = collectMessages(ws, 2);
     ws.send(JSON.stringify({ type: 'prompt', message: 'Early prompt' }));
 
-    const messages = await messagesPromise;
+    const messages = await syncMessages;
     expect(messages).toHaveLength(2);
     expect(messages[0]).toMatchObject({ type: 'prompt_received', message: 'Early prompt' });
     expect(messages[1]).toMatchObject({ type: 'session_state' });
+    // Prompt has NOT been forwarded yet
+    expect(promptCalls).toEqual([]);
+
+    // Now resolve the SDK - the queued prompt should be forwarded
+    const promptSent = waitForMessage(ws);
+    resolveSdk!();
+    await app.ready;
+
+    await expect(promptSent).resolves.toMatchObject({ type: 'prompt_sent', message: 'Early prompt' });
+    expect(promptCalls).toEqual([{ text: 'Early prompt' }]);
+  });
+
+  it('sends prompt_error when SDK initialization fails', async () => {
+    const sdkHost = {
+      create: vi.fn().mockRejectedValue(new Error('Model not found')),
+    };
+
+    const app = createBridgeApp({
+      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      sdkHost,
+    });
+    const httpServer = createServer();
+    attachWebSocketServer(httpServer, app);
+    servers.push(httpServer);
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    const address = httpServer.address();
+    if (typeof address !== 'object' || address === null) throw new Error('missing server address');
+
+    const ws = new WebSocket(`ws://127.0.0.1:${address.port}`);
+    servers.push(ws);
+    await new Promise<void>((resolve) => ws.once('open', resolve));
+
+    // Wait for SDK init to fail
+    await app.ready;
+
+    // Send prompt - should get prompt_received + session_state + prompt_error
+    const allMessages = collectMessages(ws, 3);
+    ws.send(JSON.stringify({ type: 'prompt', message: 'Will fail' }));
+
+    const messages = await allMessages;
+    expect(messages).toHaveLength(3);
+    expect(messages[0]).toMatchObject({ type: 'prompt_received', message: 'Will fail' });
+    expect(messages[1]).toMatchObject({ type: 'session_state' });
+    expect(messages[2]).toMatchObject({ type: 'prompt_error', message: 'Will fail' });
+    expect(messages[2].error).toContain('SDK session initialization failed');
   });
 });

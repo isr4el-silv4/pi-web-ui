@@ -8,13 +8,16 @@ export function createInitialState() {
     uiRequests: [],
     notifications: [],
     session: undefined,
+    sending: false,
+    sendError: null,
   };
 }
 
 export function reduceSidePanelState(state, event) {
+  console.log('[SidePanel] Event:', event.type, event);
   switch (event.type) {
     case 'bridge_connected':
-      return { ...state, bridgeOnline: true };
+      return { ...state, bridgeOnline: true, sendError: null };
     case 'bridge_disconnected':
       return { ...state, bridgeOnline: false };
     case 'session_state':
@@ -27,13 +30,22 @@ export function reduceSidePanelState(state, event) {
         storageAccessEnabled: event.session?.storageAccessEnabled ?? state.storageAccessEnabled,
       };
     case 'user_message':
-      return { ...state, messages: [...state.messages, { role: 'user', text: event.text }] };
+      return { ...state, messages: [...state.messages, { role: 'user', text: event.text }], sending: true, sendError: null };
     case 'assistant_message':
-      return { ...state, messages: [...state.messages, { role: 'assistant', text: event.text }] };
+      return { ...state, messages: [...state.messages, { role: 'assistant', text: event.text }], sending: false, sendError: null };
+    case 'prompt_sent':
+      // Confirmed prompt reached the model
+      return { ...state, sendError: null };
+    case 'prompt_error':
+      return { ...state, sending: false, sendError: event.error };
     case 'prompt_received':
       // Acknowledgement that bridge received the prompt — no UI update needed
-      // since the user message was already added locally
       return state;
+    case 'bridge_error':
+      return { ...state, notifications: [...state.notifications, `Connection error: ${event.error}`] };
+    case 'error':
+      // Generic error from bridge server
+      return { ...state, notifications: [...state.notifications, `Error: ${event.error}`], sending: false };
     case 'extension_ui_request':
       return { ...state, uiRequests: [...state.uiRequests, { id: event.id, kind: event.kind, message: event.message, options: event.options }] };
     case 'extension_ui_notify':

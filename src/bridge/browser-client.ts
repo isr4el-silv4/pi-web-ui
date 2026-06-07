@@ -44,6 +44,7 @@ export function createBrowserClientRegistry(): BrowserClientRegistry {
     },
     broadcast(message) {
       const serialized = JSON.stringify(message);
+      console.log('[Bridge] Broadcasting to', sockets.size, 'client(s):', message.type);
       for (const socket of sockets) socket.send(serialized);
     },
     requestBrowserTool(tool, params) {

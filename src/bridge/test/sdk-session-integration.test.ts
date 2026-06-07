@@ -118,7 +118,7 @@ describe('bridge SDK session integration', () => {
   });
 
   it('relays assistant messages from SDK to WebSocket client', async () => {
-    let subscribeCallback: ((event: { type: string; text?: string }) => void) | undefined;
+    let subscribeCallback: ((event: Record<string, unknown>) => void) | undefined;
     const sdkHost = {
       create: vi.fn().mockResolvedValue({
         prompt: vi.fn().mockResolvedValue(undefined),
@@ -167,9 +167,9 @@ describe('bridge SDK session integration', () => {
       ws.once('message', (data) => resolve(JSON.parse(data.toString()) as Record<string, unknown>));
     });
 
-    // Trigger an assistant_message event from the SDK session
+    // Trigger a message_end event from the SDK session (assistant response)
     if (subscribeCallback) {
-      subscribeCallback({ type: 'assistant_message', text: 'Hello from Pi!' });
+      subscribeCallback({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Hello from Pi!' }] } });
     }
 
     await expect(assistantMessage).resolves.toMatchObject({

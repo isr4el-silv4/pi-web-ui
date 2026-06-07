@@ -9,11 +9,13 @@ export interface BrowserToolExecutorLike {
 }
 
 interface PiSdkModuleLike {
-  DefaultResourceLoader: new (options: { cwd: string }) => unknown;
+  DefaultResourceLoader: new (options: { cwd: string; agentDir?: string }) => unknown;
   createAgentSession: (options: Record<string, unknown>) => Promise<unknown> | unknown;
   defineTool: (definition: Record<string, unknown>) => unknown;
   discoverAndLoadExtensions?: (...args: unknown[]) => Promise<unknown> | unknown;
   loadSkills?: (...args: unknown[]) => Promise<unknown> | unknown;
+  getAgentDir?: () => string;
+  initTheme?: (...args: unknown[]) => void;
 }
 
 const browserToolMap: Record<string, string> = {
@@ -59,18 +61,29 @@ export function createBrowserToolDefinitions(sdk: Pick<PiSdkModuleLike, 'defineT
 export function createPiSdkAdapter({ sdk, browserToolExecutor }: { sdk: PiSdkModuleLike; browserToolExecutor: BrowserToolExecutorLike }): SdkAdapter {
   return {
     async createSession(options) {
-      const resourceLoader = new sdk.DefaultResourceLoader({ cwd: options.cwd });
-      const extensions = sdk.discoverAndLoadExtensions ? await sdk.discoverAndLoadExtensions({ cwd: options.cwd, resourceLoader }) : [];
-      const skills = sdk.loadSkills ? await sdk.loadSkills({ cwd: options.cwd, resourceLoader }) : [];
+      const agentDir = typeof sdk.getAgentDir === 'function' ? sdk.getAgentDir() : undefined;
+      const resourceLoader = new sdk.DefaultResourceLoader({ cwd: options.cwd, agentDir });
+      const extensions = sdk.discoverAndLoadExtensions
+        ? await sdk.discoverAndLoadExtensions([], options.cwd, agentDir)
+        : [];
+      const skills = sdk.loadSkills
+        ? await sdk.loadSkills({ cwd: options.cwd, agentDir, skillPaths: [] })
+        : [];
+      // Initialize the global theme system before creating the agent session
+      if (typeof sdk.initTheme === 'function') {
+        sdk.initTheme();
+      }
       const tools = createBrowserToolDefinitions(sdk, browserToolExecutor);
-      return sdk.createAgentSession({
+      const result = await sdk.createAgentSession({
         cwd: options.cwd,
         sessionPath: options.sessionPath,
         resourceLoader,
-        extensions,
-        skills,
-        tools,
+        customTools: tools,
       });
+      // Pi SDK returns { session } — extract the actual session object
+      const session = result && typeof result === 'object' && 'session' in result ? (result as any).session : result;
+      console.log('[Bridge] SDK createAgentSession returned, session has prompt:', typeof session?.prompt);
+      return session;
     },
   };
 }
