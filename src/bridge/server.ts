@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { isClientCommand, type ClientCommand, type JsonObject, type JsonValue } from '../protocol/index.js';
-import { createBrowserClientRegistry } from './browser-client.js';
+import { createBrowserClientRegistry, type BrowserClientRegistry } from './browser-client.js';
 import { createBrowserToolExecutor } from './browser-tools.js';
 import { createSessionRegistry } from './session-registry.js';
 import { parseStartContext, type BridgeStartContext } from './start-context.js';
@@ -11,7 +11,27 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
   const sessions = createSessionRegistry();
   sessions.createSession(options.context);
   let sdkSession: unknown;
-  let ready = options.sdkHost?.create({ cwd: options.context.cwd, sessionPath: options.context.sessionPath }).then((session) => { sdkSession = session; });
+  let unsubscribeSdk: (() => void) | undefined;
+
+  function setupSdkSubscription(session: unknown) {
+    // Clean up previous subscription
+    unsubscribeSdk?.();
+    
+    // Subscribe to SDK session events and relay them to clients
+    if (session && typeof (session as any).subscribe === 'function') {
+      unsubscribeSdk = (session as any).subscribe((event: { type: string; text?: string }) => {
+        // Relay assistant messages and other relevant events to connected clients
+        if (event.type === 'assistant_message' || event.type === 'tool_call' || event.type === 'tool_result') {
+          clients.broadcast(event);
+        }
+      });
+    }
+  }
+
+  let ready = options.sdkHost?.create({ cwd: options.context.cwd, sessionPath: options.context.sessionPath }).then((session) => { 
+    sdkSession = session; 
+    setupSdkSubscription(session);
+  });
 
   const transport = {
     requestBrowserTool: async (tool: string, params: JsonObject) => {
@@ -22,6 +42,10 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
   };
 
   const app = {
+    // Expose browser clients for WebSocket server to register connections
+    get browserClients(): BrowserClientRegistry {
+      return clients;
+    },
     status() {
       return {
         running: true,
@@ -36,12 +60,18 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
       switch (command.type) {
         case 'new_session': {
           const session = sessions.createSession({ cwd: command.cwd });
-          ready = options.sdkHost?.create({ cwd: command.cwd }).then((created) => { sdkSession = created; });
+          ready = options.sdkHost?.create({ cwd: command.cwd }).then((created) => { 
+            sdkSession = created;
+            setupSdkSubscription(created);
+          });
           return session;
         }
         case 'resume_session': {
           const session = sessions.resumeSession(command.sessionPath, { cwd: options.context.cwd });
-          ready = options.sdkHost?.create({ cwd: options.context.cwd, sessionPath: command.sessionPath }).then((created) => { sdkSession = created; });
+          ready = options.sdkHost?.create({ cwd: options.context.cwd, sessionPath: command.sessionPath }).then((created) => { 
+            sdkSession = created;
+            setupSdkSubscription(created);
+          });
           return session;
         }
         case 'set_permission_mode':
@@ -51,6 +81,13 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
         case 'set_storage_access':
           return sessions.setStorageAccess(command.enabled);
         case 'prompt':
+          // Forward prompt to SDK session if available
+          if (sdkSession && typeof (sdkSession as any).prompt === 'function') {
+            (sdkSession as any).prompt(command.message).catch(() => {
+              // Silently handle prompt errors - Pi will report them via events
+            });
+          }
+          // Also broadcast to clients for immediate UI feedback
           clients.broadcast({ type: 'prompt_received', message: command.message });
           return sessions.getCurrentSession();
         case 'abort':

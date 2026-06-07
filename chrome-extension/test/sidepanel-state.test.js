@@ -50,4 +50,21 @@ describe('side panel state', () => {
       { role: 'assistant', text: 'Hello' },
     ]);
   });
+
+  it('ignores prompt_received acknowledgement to avoid duplicating user message', () => {
+    const withUser = reduceSidePanelState(createInitialState(), { type: 'user_message', text: 'Hi' });
+    const withAck = reduceSidePanelState(withUser, { type: 'prompt_received', message: 'Hi' });
+
+    // prompt_received should not add another message
+    expect(withAck.messages).toEqual([{ role: 'user', text: 'Hi' }]);
+  });
+
+  it('relays assistant_message from bridge as assistant role', () => {
+    const state = reduceSidePanelState(createInitialState(), {
+      type: 'assistant_message',
+      text: 'Pi response here',
+    });
+
+    expect(state.messages).toEqual([{ role: 'assistant', text: 'Pi response here' }]);
+  });
 });

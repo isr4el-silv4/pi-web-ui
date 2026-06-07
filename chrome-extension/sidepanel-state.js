@@ -29,8 +29,11 @@ export function reduceSidePanelState(state, event) {
     case 'user_message':
       return { ...state, messages: [...state.messages, { role: 'user', text: event.text }] };
     case 'assistant_message':
+      return { ...state, messages: [...state.messages, { role: 'assistant', text: event.text }] };
     case 'prompt_received':
-      return { ...state, messages: [...state.messages, { role: 'assistant', text: event.text ?? event.message }] };
+      // Acknowledgement that bridge received the prompt — no UI update needed
+      // since the user message was already added locally
+      return state;
     case 'extension_ui_request':
       return { ...state, uiRequests: [...state.uiRequests, { id: event.id, kind: event.kind, message: event.message, options: event.options }] };
     case 'extension_ui_notify':
