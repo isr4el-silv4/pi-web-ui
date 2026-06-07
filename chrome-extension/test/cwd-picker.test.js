@@ -123,5 +123,41 @@ describe('cwd picker', () => {
       const result = await resolveCwdPath(fakeHandle, fakeChrome);
       expect(result).toBe('/path/from/promise');
     });
+
+    it('handles promise-based getAsEntry (newer Chrome versions)', async () => {
+      const fakeEntry = { name: 'async-entry-dir' };
+      const fakeHandle = {
+        name: 'async-entry-dir',
+        getAsEntry: () => Promise.resolve(fakeEntry),
+      };
+
+      const fakeChrome = {
+        fileSystem: {
+          getDisplayPath: vi.fn((entry, callback) => {
+            callback('/path/from/async-entry');
+          }),
+        },
+      };
+
+      const result = await resolveCwdPath(fakeHandle, fakeChrome);
+      expect(result).toBe('/path/from/async-entry');
+      expect(fakeChrome.fileSystem.getDisplayPath).toHaveBeenCalledWith(fakeEntry, expect.any(Function));
+    });
+
+    it('returns directory name when promise-based getAsEntry rejects', async () => {
+      const fakeHandle = {
+        name: 'reject-dir',
+        getAsEntry: () => Promise.reject(new Error('getAsEntry async failed')),
+      };
+
+      const fakeChrome = {
+        fileSystem: {
+          getDisplayPath: vi.fn(),
+        },
+      };
+
+      const result = await resolveCwdPath(fakeHandle, fakeChrome);
+      expect(result).toBe('reject-dir');
+    });
   });
 });

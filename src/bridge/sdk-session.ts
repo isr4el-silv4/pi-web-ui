@@ -1,4 +1,63 @@
 import type { JsonObject } from '../protocol/index.js';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
+/**
+ * Resolves a CWD path, ensuring it exists on disk.
+ * 
+ * Strategy:
+ * 1. If absolute path exists, return it as-is
+ * 2. If relative, resolve against process.cwd() and check if it exists
+ * 3. If the resolved path doesn't exist, search for a directory with that name
+ *    in common locations: home dir, home subdirs (Desktop, Documents, Downloads, Projects, etc.),
+ *    and parent of process.cwd()
+ * 4. Return the best match found, or the original resolved path as fallback
+ */
+const COMMON_HOME_SUBDIRS = [
+  '',                          // home dir itself
+  'Desktop',
+  'Documents',
+  'Downloads',
+  'Projects',
+  'IdeaProjects',
+  'src',
+  'code',
+  'workspace',
+];
+
+export function resolveCwd(cwd: string, homeDir: string = os.homedir()): string {
+  const resolved = path.resolve(cwd);
+  
+  // If the resolved path exists, use it directly
+  if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+    return resolved;
+  }
+  
+  // If the path is already absolute but doesn't exist, return it as-is
+  // (the caller will handle the error)
+  if (path.isAbsolute(cwd)) {
+    return resolved;
+  }
+  
+  // For relative paths that don't exist in process.cwd(), search common locations
+  const dirName = path.basename(cwd);
+  const searchDirs = [
+    ...COMMON_HOME_SUBDIRS.map((sub) => path.join(homeDir, sub)),
+    path.dirname(process.cwd()),  // parent of process.cwd()
+  ];
+  
+  for (const searchDir of searchDirs) {
+    const candidate = path.join(searchDir, dirName);
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      console.log(`[Bridge] CWD '${cwd}' not found at '${resolved}', found at: '${candidate}'`);
+      return candidate;
+    }
+  }
+  
+  // Return the original resolved path (may not exist, but caller decides)
+  return resolved;
+}
 
 export interface SdkAdapter {
   createSession(options: { cwd: string; sessionPath?: string }): Promise<unknown>;
@@ -61,13 +120,20 @@ export function createBrowserToolDefinitions(sdk: Pick<PiSdkModuleLike, 'defineT
 export function createPiSdkAdapter({ sdk, browserToolExecutor }: { sdk: PiSdkModuleLike; browserToolExecutor: BrowserToolExecutorLike }): SdkAdapter {
   return {
     async createSession(options) {
+      console.log('[Bridge] Creating SDK session with cwd:', options.cwd);
+      
+      // Resolve to absolute path, with home directory fallback for relative paths
+      const resolvedCwd = resolveCwd(options.cwd);
+      console.log('[Bridge] Resolved cwd:', resolvedCwd);
+      
       const agentDir = typeof sdk.getAgentDir === 'function' ? sdk.getAgentDir() : undefined;
-      const resourceLoader = new sdk.DefaultResourceLoader({ cwd: options.cwd, agentDir });
+      console.log('[Bridge] agentDir:', agentDir);
+      const resourceLoader = new sdk.DefaultResourceLoader({ cwd: resolvedCwd, agentDir });
       const extensions = sdk.discoverAndLoadExtensions
-        ? await sdk.discoverAndLoadExtensions([], options.cwd, agentDir)
+        ? await sdk.discoverAndLoadExtensions([], resolvedCwd, agentDir)
         : [];
       const skills = sdk.loadSkills
-        ? await sdk.loadSkills({ cwd: options.cwd, agentDir, skillPaths: [] })
+        ? await sdk.loadSkills({ cwd: resolvedCwd, agentDir, skillPaths: [] })
         : [];
       // Initialize the global theme system before creating the agent session
       if (typeof sdk.initTheme === 'function') {
@@ -75,7 +141,7 @@ export function createPiSdkAdapter({ sdk, browserToolExecutor }: { sdk: PiSdkMod
       }
       const tools = createBrowserToolDefinitions(sdk, browserToolExecutor);
       const result = await sdk.createAgentSession({
-        cwd: options.cwd,
+        cwd: resolvedCwd,
         sessionPath: options.sessionPath,
         resourceLoader,
         customTools: tools,

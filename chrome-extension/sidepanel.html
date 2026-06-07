@@ -14,7 +14,9 @@
     <main>
       <section id="offline">Start Pi Web UI from terminal Pi with: <code>/pi-web-ui start</code></section>
       <section id="session" hidden>
-        <label>cwd <input id="cwd" placeholder="/path/to/project" /></label>
+        <label>cwd <span id="cwd-display">not set</span> <button id="cwd-picker">Browse…</button></label>
+        <div id="cwd-warning" class="cwd-warning" hidden>⚠ Only directory name detected. Pi may not find this directory. Enter the full path below:</div>
+        <input id="cwd-input" type="text" placeholder="Full path to project directory" hidden />
         <button id="new-session">New session</button>
         <label><input id="cookies" type="checkbox" /> cookies</label>
         <label><input id="storage" type="checkbox" /> storage</label>

@@ -14,7 +14,8 @@ export async function resolveCwdPath(dirHandle, chromeApi = chrome) {
   // Try to get the full display path using chrome.fileSystem API
   if (chromeApi?.fileSystem?.getDisplayPath && typeof dirHandle.getAsEntry === 'function') {
     try {
-      const entry = dirHandle.getAsEntry();
+      // getAsEntry() may return a Promise in newer Chrome versions
+      const entry = await Promise.resolve(dirHandle.getAsEntry());
       
       // chrome.fileSystem.getDisplayPath can use either callbacks or promises
       // depending on the Chrome version. We handle both.
@@ -28,13 +29,18 @@ export async function resolveCwdPath(dirHandle, chromeApi = chrome) {
           }
         };
         
-        const result = chromeApi.fileSystem.getDisplayPath(entry, handleResult);
-        
-        // If it also returns a Promise (Manifest V3 style), use it as well
-        if (result instanceof Promise) {
-          result.then(handleResult).catch(() => {
-            if (!resolved) resolve(null);
-          });
+        try {
+          const result = chromeApi.fileSystem.getDisplayPath(entry, handleResult);
+          
+          // If it also returns a Promise (Manifest V3 style), use it as well
+          if (result instanceof Promise) {
+            result.then(handleResult).catch(() => {
+              if (!resolved) resolve(null);
+            });
+          }
+        } catch {
+          // getDisplayPath threw synchronously
+          resolve(null);
         }
         
         // Timeout after 2 seconds if neither callback nor promise resolves
