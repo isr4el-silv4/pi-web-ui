@@ -5,6 +5,7 @@ import { createBrowserToolExecutor } from './browser-tools.js';
 import { createSessionRegistry } from './session-registry.js';
 import { parseStartContext, type BridgeStartContext } from './start-context.js';
 import { attachWebSocketServer } from './websocket-server.js';
+import { createDefaultPiSdkAdapter, createSdkSessionHost, type SdkAdapter } from './sdk-session.js';
 
 export function createBridgeApp(options: { context: BridgeStartContext; pid?: number; sdkHost?: { create(options: { cwd: string; sessionPath?: string }): Promise<unknown> }; ui?: { respond(response: { id: string; value: unknown }): boolean } }) {
   const clients = createBrowserClientRegistry();
@@ -28,11 +29,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     }
   }
 
-  let ready = options.sdkHost?.create({ cwd: options.context.cwd, sessionPath: options.context.sessionPath }).then((session) => { 
-    sdkSession = session; 
-    setupSdkSubscription(session);
-  });
-
+  // Create browser tool executor for SDK integration
   const transport = {
     requestBrowserTool: async (tool: string, params: JsonObject) => {
       const session = sessions.getCurrentSession() ?? { id: 'default', cwd: options.context.cwd, permissionMode: options.context.permissionMode, cookieAccessEnabled: options.context.cookieAccessEnabled, storageAccessEnabled: options.context.storageAccessEnabled };
@@ -40,6 +37,26 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
       return executor.execute(tool, params);
     },
   };
+
+  // If no sdkHost provided, create one using the default Pi SDK adapter
+  let sdkHost = options.sdkHost;
+  if (!sdkHost) {
+    // Create SDK adapter asynchronously - it will be ready when first needed
+    const sdkAdapterPromise = createDefaultPiSdkAdapter({ execute: transport.requestBrowserTool });
+    sdkHost = {
+      async create(createOptions) {
+        const adapter = await sdkAdapterPromise;
+        return adapter.createSession(createOptions);
+      },
+    };
+  }
+
+  let ready = sdkHost.create({ cwd: options.context.cwd, sessionPath: options.context.sessionPath }).then((session) => { 
+    sdkSession = session; 
+    setupSdkSubscription(session);
+  }).catch((error: unknown) => {
+    console.error('Failed to create SDK session:', error);
+  });
 
   const app = {
     // Expose browser clients for WebSocket server to register connections
@@ -60,17 +77,21 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
       switch (command.type) {
         case 'new_session': {
           const session = sessions.createSession({ cwd: command.cwd });
-          ready = options.sdkHost?.create({ cwd: command.cwd }).then((created) => { 
+          ready = sdkHost.create({ cwd: command.cwd }).then((created) => { 
             sdkSession = created;
             setupSdkSubscription(created);
+          }).catch((error: unknown) => {
+            console.error('Failed to create SDK session:', error);
           });
           return session;
         }
         case 'resume_session': {
           const session = sessions.resumeSession(command.sessionPath, { cwd: options.context.cwd });
-          ready = options.sdkHost?.create({ cwd: options.context.cwd, sessionPath: command.sessionPath }).then((created) => { 
+          ready = sdkHost.create({ cwd: options.context.cwd, sessionPath: command.sessionPath }).then((created) => { 
             sdkSession = created;
             setupSdkSubscription(created);
+          }).catch((error: unknown) => {
+            console.error('Failed to create SDK session:', error);
           });
           return session;
         }
@@ -83,9 +104,11 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
         case 'prompt':
           // Forward prompt to SDK session if available
           if (sdkSession && typeof (sdkSession as any).prompt === 'function') {
-            (sdkSession as any).prompt(command.message).catch(() => {
-              // Silently handle prompt errors - Pi will report them via events
+            (sdkSession as any).prompt(command.message).catch((error: unknown) => {
+              console.error('Failed to send prompt to Pi:', error);
             });
+          } else {
+            console.warn('SDK session not ready, prompt not forwarded');
           }
           // Also broadcast to clients for immediate UI feedback
           clients.broadcast({ type: 'prompt_received', message: command.message });
