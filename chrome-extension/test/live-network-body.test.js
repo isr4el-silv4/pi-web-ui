@@ -7,7 +7,7 @@ describe('live network response bodies', () => {
       tabs: { query: vi.fn(async () => [{ id: 9 }]) },
       debugger: { sendCommand: vi.fn(async () => ({ body: 'live' })) },
     };
-    const networkCapture = { getResponseBody: vi.fn(() => undefined) };
+    const networkCapture = { start: vi.fn(), getResponseBody: vi.fn(() => undefined) };
     const executor = createToolExecutor(chrome, { networkCapture, skipAttachEvents: true });
     await expect(executor.execute('network.getResponseBody', { requestId: 'r1' })).resolves.toEqual({ body: 'live' });
     expect(chrome.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 9 }, 'Network.getResponseBody', { requestId: 'r1' });
@@ -19,6 +19,7 @@ describe('live network response bodies', () => {
       debugger: { attach: vi.fn(), sendCommand: vi.fn(async () => ({})) },
     };
     const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+    await new Promise((r) => setTimeout(r, 50)); // wait for auto-attach
     await executor.execute('debugger.attach', {});
     expect(chrome.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 9 }, 'Runtime.enable', {});
     expect(chrome.debugger.sendCommand).toHaveBeenCalledWith({ tabId: 9 }, 'Network.enable', {});

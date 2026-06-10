@@ -13,6 +13,88 @@ export function createToolExecutor(chromeApi = chrome, captures = {}) {
   const cookiesClient = captures.cookiesClient ?? createCookiesClient(chromeApi);
   const storageClient = captures.storageClient ?? createStorageClient(chromeApi);
 
+  // Auto-start network capture
+  networkCapture.start();
+
+  const attachedTabs = new Set();
+  const reattachTimers = new Map();  // tabId -> intervalId
+
+  async function attachAndNotify(tabId) {
+    await debuggerClient.attach(tabId);
+    await debuggerClient.sendCdpCommand(tabId, 'Network.enable', {});
+    await debuggerClient.sendCdpCommand(tabId, 'Runtime.enable', {});
+    attachedTabs.add(tabId);
+
+    // Notify sidepanel
+    try {
+      const tab = await chromeApi.tabs.get(tabId);
+      captures.onAttach?.(tabId, tab.title);
+    } catch {
+      // Tab may have been closed
+    }
+  }
+
+  async function detachTab(tabId) {
+    // Clear any reattach timer for this tab
+    const timerId = reattachTimers.get(tabId);
+    if (timerId) {
+      clearInterval(timerId);
+      reattachTimers.delete(tabId);
+    }
+
+    if (attachedTabs.has(tabId)) {
+      await debuggerClient.detach(tabId);
+      attachedTabs.delete(tabId);
+    }
+  }
+
+  function startReattachRetry(tabId) {
+    const intervalId = setInterval(async () => {
+      try {
+        await attachAndNotify(tabId);
+        clearInterval(intervalId);
+        reattachTimers.delete(tabId);
+        captures.onReattach?.(tabId);
+      } catch {
+        // DevTools still open or tab closed, keep retrying
+      }
+    }, 1000);
+    reattachTimers.set(tabId, intervalId);
+  }
+
+  // Register detach listener for auto-reattach
+  if (chromeApi.debugger?.onDetach) {
+    chromeApi.debugger.onDetach.addListener((source, reason) => {
+      attachedTabs.delete(source.tabId);
+      captures.onDetach?.(source.tabId, reason);
+      startReattachRetry(source.tabId);
+    });
+  }
+
+  // Register tab activation listener for auto-attach
+  if (chromeApi.tabs?.onActivated) {
+    chromeApi.tabs.onActivated.addListener(async (activeInfo) => {
+      const tabId = activeInfo.tabId;
+      if (!attachedTabs.has(tabId) && !reattachTimers.has(tabId)) {
+        try {
+          await attachAndNotify(tabId);
+        } catch {
+          // DevTools may be open on this tab
+        }
+      }
+    });
+  }
+
+  // Auto-attach to the active tab on startup
+  (async () => {
+    try {
+      const tab = await debuggerClient.getCurrentTab();
+      await attachAndNotify(tab.id);
+    } catch {
+      // Tab may be a chrome:// page or DevTools may be open
+    }
+  })();
+
   async function currentTabId() {
     const tab = await debuggerClient.getCurrentTab();
     return tab.id;
@@ -55,15 +137,18 @@ export function createToolExecutor(chromeApi = chrome, captures = {}) {
         case 'debugger.sendCdpCommand':
           return debuggerClient.sendCdpCommand(tabId, params.method, params.params ?? {});
         case 'debugger.attach':
-          await debuggerClient.attach(tabId);
-          await debuggerClient.sendCdpCommand(tabId, 'Runtime.enable', {});
-          await debuggerClient.sendCdpCommand(tabId, 'Network.enable', {});
+          await attachAndNotify(tabId);
           return { attached: true };
         case 'debugger.detach':
-          await debuggerClient.detach(tabId); return { detached: true };
+          await detachTab(tabId);
+          return { detached: true };
         default:
           throw new Error(`Unsupported browser tool: ${tool}`);
       }
     },
+    isAttached(tabId) { return attachedTabs.has(tabId); },
+    get attachedTabIds() { return [...attachedTabs]; },
+    networkCapture,
+    detachTab,
   };
 }

@@ -25,6 +25,9 @@ const els = {
   cookies: document.querySelector('#cookies'),
   storage: document.querySelector('#storage'),
   mode: document.querySelector('#mode'),
+  devtoolsWarning: document.querySelector('#devtools-warning'),
+  attachedTabsBar: document.querySelector('#attached-tabs-bar'),
+  attachedTabsList: document.querySelector('#attached-tabs-list'),
 };
 
 let selectedCwd = null;
@@ -36,6 +39,7 @@ function render() {
   els.cookies.checked = state.cookieAccessEnabled;
   els.storage.checked = state.storageAccessEnabled;
   els.mode.value = state.permissionMode;
+  els.devtoolsWarning.hidden = !state.devtoolsConflict;
   
   // Update send button state
   const isDisabled = !state.bridgeOnline || state.sending;
@@ -86,6 +90,31 @@ function render() {
   }
   // Scroll to bottom of messages
   els.messages.scrollTop = els.messages.scrollHeight;
+
+  // Render attached tabs bar
+  els.attachedTabsBar.hidden = state.attachedTabs.length === 0;
+  els.attachedTabsList.innerHTML = '';
+  for (const tab of state.attachedTabs) {
+    const chip = document.createElement('span');
+    chip.className = 'tab-chip';
+
+    const label = document.createElement('span');
+    label.className = 'tab-chip-label';
+    label.textContent = tab.title;
+    chip.append(label);
+
+    const remove = document.createElement('button');
+    remove.className = 'tab-chip-remove';
+    remove.textContent = '×';
+    remove.title = 'Detach debugger from this tab';
+    remove.addEventListener('click', () => {
+      toolExecutor.detachTab(tab.id);
+      dispatch({ type: 'debugger_detached', tabId: tab.id });
+    });
+    chip.append(remove);
+
+    els.attachedTabsList.append(chip);
+  }
 }
 
 function dispatch(event) {
@@ -93,8 +122,52 @@ function dispatch(event) {
   render();
 }
 
-const toolExecutor = createToolExecutor();
-client = createBridgeClient({ onEvent: dispatch, executeTool: (tool, params) => toolExecutor.execute(tool, params) });
+const toolExecutor = createToolExecutor(undefined, {
+  onAttach: (tabId, title) => {
+    dispatch({ type: 'debugger_attached', tabId, title });
+  },
+  onDetach: (tabId, reason) => {
+    dispatch({ type: 'debugger_detached', tabId });
+    // Check if this is the active tab for DevTools warning
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (tab?.id === tabId) {
+        dispatch({ type: 'devtools_conflict' });
+      }
+    });
+  },
+  onReattach: (tabId) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (tab?.id === tabId) {
+        dispatch({ type: 'devtools_conflict_resolved' });
+      }
+    });
+  },
+});
+
+// Check for DevTools conflict on tab activation
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  const tab = await chrome.tabs.get(activeInfo.tabId);
+  if (!toolExecutor.isAttached(tab.id)) {
+    dispatch({ type: 'devtools_conflict' });
+  } else {
+    dispatch({ type: 'devtools_conflict_resolved' });
+  }
+});
+
+client = createBridgeClient({
+  onEvent: (event) => {
+    if (event.type === 'bridge_connected') {
+      // Sync initial attached tabs from toolExecutor
+      for (const tabId of toolExecutor.attachedTabIds) {
+        chrome.tabs.get(tabId).then((tab) => {
+          dispatch({ type: 'debugger_attached', tabId, title: tab.title });
+        }).catch(() => {});
+      }
+    }
+    dispatch(event);
+  },
+  executeTool: (tool, params) => toolExecutor.execute(tool, params),
+});
 client.connect();
 
 els.form.addEventListener('submit', (event) => {

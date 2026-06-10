@@ -14,6 +14,8 @@ describe('side panel state', () => {
       session: undefined,
       sending: false,
       sendError: null,
+      devtoolsConflict: false,
+      attachedTabs: [],
     });
   });
 
@@ -118,5 +120,56 @@ describe('side panel state', () => {
     });
     expect(errored.notifications).toEqual(['Error: Command handling failed: something went wrong']);
     expect(errored.sending).toBe(false);
+  });
+
+  it('sets devtoolsConflict=true on devtools_conflict event', () => {
+    const state = reduceSidePanelState(createInitialState(), { type: 'devtools_conflict' });
+    expect(state.devtoolsConflict).toBe(true);
+  });
+
+  it('sets devtoolsConflict=false on devtools_conflict_resolved event', () => {
+    const withConflict = reduceSidePanelState(createInitialState(), { type: 'devtools_conflict' });
+    const resolved = reduceSidePanelState(withConflict, { type: 'devtools_conflict_resolved' });
+    expect(resolved.devtoolsConflict).toBe(false);
+  });
+
+  it('appends tab to attachedTabs on debugger_attached event', () => {
+    const state = reduceSidePanelState(createInitialState(), {
+      type: 'debugger_attached',
+      tabId: 42,
+      title: 'My Page',
+    });
+    expect(state.attachedTabs).toEqual([{ id: 42, title: 'My Page' }]);
+  });
+
+  it('removes tab from attachedTabs on debugger_detached event', () => {
+    const withTab = reduceSidePanelState(createInitialState(), {
+      type: 'debugger_attached',
+      tabId: 42,
+      title: 'My Page',
+    });
+    const detached = reduceSidePanelState(withTab, { type: 'debugger_detached', tabId: 42 });
+    expect(detached.attachedTabs).toEqual([]);
+  });
+
+  it('keeps other tabs when one is detached', () => {
+    let state = reduceSidePanelState(createInitialState(), {
+      type: 'debugger_attached', tabId: 1, title: 'Tab 1',
+    });
+    state = reduceSidePanelState(state, {
+      type: 'debugger_attached', tabId: 2, title: 'Tab 2',
+    });
+    state = reduceSidePanelState(state, { type: 'debugger_detached', tabId: 1 });
+    expect(state.attachedTabs).toEqual([{ id: 2, title: 'Tab 2' }]);
+  });
+
+  it('does not duplicate tabs when debugger_attached fires for same tabId', () => {
+    let state = reduceSidePanelState(createInitialState(), {
+      type: 'debugger_attached', tabId: 42, title: 'My Page',
+    });
+    state = reduceSidePanelState(state, {
+      type: 'debugger_attached', tabId: 42, title: 'My Page',
+    });
+    expect(state.attachedTabs).toHaveLength(1);
   });
 });

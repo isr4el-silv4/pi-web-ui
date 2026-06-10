@@ -10,6 +10,8 @@ export function createInitialState() {
     session: undefined,
     sending: false,
     sendError: null,
+    devtoolsConflict: false,
+    attachedTabs: [],
   };
 }
 
@@ -52,6 +54,22 @@ export function reduceSidePanelState(state, event) {
       return { ...state, notifications: [...state.notifications, event.message] };
     case 'extension_ui_response_sent':
       return { ...state, uiRequests: state.uiRequests.filter((request) => request.id !== event.id) };
+    case 'devtools_conflict':
+      return { ...state, devtoolsConflict: true };
+    case 'devtools_conflict_resolved':
+      return { ...state, devtoolsConflict: false };
+    case 'debugger_attached':
+      return {
+        ...state,
+        attachedTabs: state.attachedTabs.some((t) => t.id === event.tabId)
+          ? state.attachedTabs
+          : [...state.attachedTabs, { id: event.tabId, title: event.title }],
+      };
+    case 'debugger_detached':
+      return {
+        ...state,
+        attachedTabs: state.attachedTabs.filter((t) => t.id !== event.tabId),
+      };
     default:
       return state;
   }
