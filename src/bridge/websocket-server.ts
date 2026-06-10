@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 import { WebSocketServer, WebSocket as WSWebSocket } from 'ws';
-import { isClientCommand } from '../protocol/index.js';
+import { isClientCommand, isBrowserToolResponse } from '../protocol/index.js';
 import type { createBridgeApp } from './server.js';
 import type { BrowserSocketLike } from './browser-client.js';
 
@@ -37,6 +37,12 @@ export function attachWebSocketServer(
         } catch (sendError) {
           console.error('[Bridge] Failed to send error response:', sendError);
         }
+        return;
+      }
+
+      // Route browser_tool_response to the browser client registry
+      if (isBrowserToolResponse(parsed)) {
+        browserClient?.receive(data.toString());
         return;
       }
 

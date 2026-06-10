@@ -130,6 +130,44 @@ describe('bridge websocket server', () => {
     expect(result[1]).toMatchObject({ type: 'session_state' });
   }, 10000);
 
+  it('routes browser_tool_response to browser client registry instead of rejecting', async () => {
+    const sdkHost = {
+      create: vi.fn().mockResolvedValue({ prompt: vi.fn().mockResolvedValue(undefined) }),
+    };
+    const app = createBridgeApp({
+      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      sdkHost,
+    });
+    await app.ready;
+
+    const httpServer = createServer();
+    attachWebSocketServer(httpServer, app);
+    servers.push(httpServer);
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    const address = httpServer.address();
+    if (typeof address !== 'object' || address === null) throw new Error('missing server address');
+
+    const ws = new WebSocket(`ws://127.0.0.1:${address.port}`);
+    servers.push(ws);
+    await new Promise<void>((resolve) => ws.once('open', resolve));
+
+    // Collect any messages sent back
+    const messages: Record<string, unknown>[] = [];
+    ws.on('message', (data: Buffer) => {
+      messages.push(JSON.parse(data.toString()) as Record<string, unknown>);
+    });
+
+    // Send a browser_tool_response — should NOT be rejected with error
+    ws.send(JSON.stringify({ id: 'browser-tool-1', type: 'browser_tool_response', success: true, data: { tabs: [] } }));
+
+    // Wait briefly to see if any error response is sent
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Should NOT get an error response — the message is routed silently to the client registry
+    const errors = messages.filter((m) => m.type === 'error');
+    expect(errors).toHaveLength(0);
+  }, 10000);
+
   it('sends error response when handleClientCommand throws', async () => {
     const sdkHost = {
       create: vi.fn().mockResolvedValue({

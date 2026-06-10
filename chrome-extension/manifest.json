@@ -3,7 +3,7 @@
   "name": "Pi Web UI",
   "version": "0.1.0",
   "description": "Chrome side-panel UI for Pi backed by a local bridge.",
-  "permissions": ["debugger", "tabs", "activeTab", "scripting", "cookies", "storage", "sidePanel", "webRequest"],
+  "permissions": ["debugger", "tabs", "activeTab", "scripting", "cookies", "storage", "sidePanel", "webRequest", "fileSystem"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },
   "action": { "default_title": "Pi Web UI" },

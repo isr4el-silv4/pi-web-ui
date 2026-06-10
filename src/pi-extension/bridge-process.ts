@@ -36,10 +36,12 @@ const READY_TIMEOUT_MS = 10000;
 
 export function defaultBridgeEntryPath(): string {
   const here = dirname(fileURLToPath(import.meta.url));
+  // When loaded from dist/ (npm install): ../bridge/server.js → dist/bridge/server.js
   const distPath = resolve(here, '../bridge/server.js');
   if (existsSync(distPath)) return distPath;
-  const srcPath = resolve(here, '../../src/bridge/server.ts');
-  if (existsSync(srcPath)) return resolve(dirname(srcPath), '../dist/bridge/server.js');
+  // When loaded from src/ (Pi dev): ../../dist/bridge/server.js → <project-root>/dist/bridge/server.js
+  const srcFallback = resolve(here, '../../dist/bridge/server.js');
+  if (existsSync(srcFallback)) return srcFallback;
   return distPath;
 }
 

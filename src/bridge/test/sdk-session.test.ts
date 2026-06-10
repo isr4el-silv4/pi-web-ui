@@ -1,9 +1,72 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { createPiSdkAdapter, createSdkSessionHost, resolveCwd } from '../sdk-session.js';
+import { createPiSdkAdapter, createSdkSessionHost, resolveCwd, createBrowserToolDefinitions } from '../sdk-session.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
+
+describe('createBrowserToolDefinitions', () => {
+  it('wraps tool execute result in { content: [...], details: {...} } format expected by Pi SDK', async () => {
+    const createdTools: unknown[] = [];
+    const sdk = {
+      defineTool: vi.fn((tool) => { createdTools.push(tool); return tool; }),
+    };
+    const executor = {
+      execute: vi.fn(async (tool, params) => ({ tabs: [{ id: 1, title: 'Test Tab' }] })),
+    };
+
+    createBrowserToolDefinitions(sdk, executor);
+
+    // Find the tabs.list tool
+    const listTabsTool = createdTools.find((t: any) => t.name === 'browser_list_tabs');
+    expect(listTabsTool).toBeDefined();
+
+    // Execute the tool and verify the result format
+    const result = await (listTabsTool as any).execute('tool-call-1', {});
+    expect(result).toEqual({
+      content: [{ type: 'text', text: JSON.stringify({ tabs: [{ id: 1, title: 'Test Tab' }] }) }],
+      details: { tabs: [{ id: 1, title: 'Test Tab' }] },
+    });
+    expect(executor.execute).toHaveBeenCalledWith('tabs.list', {});
+  });
+
+  it('passes toolCallId and params to execute function', async () => {
+    const createdTools: unknown[] = [];
+    const sdk = {
+      defineTool: vi.fn((tool) => { createdTools.push(tool); return tool; }),
+    };
+    const executor = {
+      execute: vi.fn(async () => ({ text: 'hello' })),
+    };
+
+    createBrowserToolDefinitions(sdk, executor);
+
+    const getTextTool = createdTools.find((t: any) => t.name === 'browser_get_page_text');
+    expect(getTextTool).toBeDefined();
+
+    await (getTextTool as any).execute('call-123', { tabId: 5 });
+    expect(executor.execute).toHaveBeenCalledWith('page.getText', { tabId: 5 });
+  });
+
+  it('wraps error results in content array with error text', async () => {
+    const createdTools: unknown[] = [];
+    const sdk = {
+      defineTool: vi.fn((tool) => { createdTools.push(tool); return tool; }),
+    };
+    const executor = {
+      execute: vi.fn(async () => { throw new Error('No Chrome extension client connected'); }),
+    };
+
+    createBrowserToolDefinitions(sdk, executor);
+
+    const listTabsTool = createdTools.find((t: any) => t.name === 'browser_list_tabs');
+    const result = await (listTabsTool as any).execute('tool-call-1', {});
+    expect(result).toEqual({
+      content: [{ type: 'text', text: 'Error: No Chrome extension client connected' }],
+      isError: true,
+    });
+  });
+});
 
 describe('sdk session host', () => {
   it('creates sessions through an injected SDK adapter', async () => {

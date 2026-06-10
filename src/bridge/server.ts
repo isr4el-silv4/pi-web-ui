@@ -23,26 +23,31 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     if (session && typeof (session as any).subscribe === 'function') {
       console.log('[Bridge] SDK session has subscribe method, attaching listener');
       unsubscribeSdk = (session as any).subscribe((event: { type: string; text?: string; message?: { role?: string; content?: unknown }; toolName?: string; result?: unknown }) => {
-        console.log('[Bridge] SDK event received:', event.type, event);
-        // SDK emits: message_end (with message.role), tool_execution_start/update/end, etc.
-        if (event.type === 'message_end' && event.message?.role === 'assistant') {
-          // Extract text content from assistant message
-          const content = event.message.content;
-          const text = Array.isArray(content)
-            ? content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n')
-            : typeof content === 'string' ? content : JSON.stringify(content);
-          console.log('[Bridge] Broadcasting assistant_message, text length:', text?.length ?? 0);
-          if (text) {
-            clients.broadcast({ type: 'assistant_message', text });
-          } else {
-            console.log('[Bridge] No text content in assistant message_end event');
+        try {
+          console.log('[Bridge] SDK event received:', event.type, event);
+          // SDK emits: message_end (with message.role), tool_execution_start/update/end, etc.
+          if (event.type === 'message_end' && event.message?.role === 'assistant') {
+            // Extract text content from assistant message
+            const content = event.message.content;
+            const text = Array.isArray(content)
+              ? content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n')
+              : typeof content === 'string' ? content : JSON.stringify(content);
+            console.log('[Bridge] Broadcasting assistant_message, text length:', text?.length ?? 0);
+            if (text) {
+              clients.broadcast({ type: 'assistant_message', text });
+            } else {
+              console.log('[Bridge] No text content in assistant message_end event');
+            }
+          } else if (event.type === 'tool_execution_start') {
+            console.log('[Bridge] Broadcasting tool_call:', event.toolName);
+            clients.broadcast({ type: 'tool_call', name: event.toolName ?? 'unknown', params: {} });
+          } else if (event.type === 'tool_execution_end') {
+            console.log('[Bridge] Broadcasting tool_result:', event.toolName);
+            clients.broadcast({ type: 'tool_result', name: event.toolName ?? 'unknown', result: event.result as import('../protocol/index.js').JsonValue });
           }
-        } else if (event.type === 'tool_execution_start') {
-          console.log('[Bridge] Broadcasting tool_call:', event.toolName);
-          clients.broadcast({ type: 'tool_call', name: event.toolName ?? 'unknown', params: {} });
-        } else if (event.type === 'tool_execution_end') {
-          console.log('[Bridge] Broadcasting tool_result:', event.toolName);
-          clients.broadcast({ type: 'tool_result', name: event.toolName ?? 'unknown', result: event.result as import('../protocol/index.js').JsonValue });
+        } catch (err) {
+          console.error('[Bridge] SDK subscription callback error:', err);
+          // Never let callback errors propagate — they would reject the SDK's prompt() call
         }
       });
     } else {

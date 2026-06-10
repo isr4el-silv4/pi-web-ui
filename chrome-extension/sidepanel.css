@@ -7,7 +7,34 @@ main { padding: 12px; }
 #session { display: grid; gap: 8px; margin-bottom: 12px; }
 #messages { display: grid; gap: 8px; }
 .message { padding: 8px; border-radius: 6px; background: #f2f2f2; white-space: pre-wrap; }
-.message.user { background: #e8f0fe; }
+.message.user { background: #e8f0fe; white-space: pre-wrap; }
+.message.assistant { white-space: normal; word-wrap: break-word; overflow-wrap: break-word; }
+.message.assistant > :first-child { margin-top: 0; }
+.message.assistant > :last-child { margin-bottom: 0; }
+.message.assistant p { margin: 0.4em 0; line-height: 1.5; }
+.message.assistant p:first-child { margin-top: 0; }
+.message.assistant p:last-child { margin-bottom: 0; }
+.message.assistant h1, .message.assistant h2, .message.assistant h3, .message.assistant h4, .message.assistant h5, .message.assistant h6 { margin: 0.6em 0 0.3em; font-weight: 600; line-height: 1.3; }
+.message.assistant h1 { font-size: 1.3em; }
+.message.assistant h2 { font-size: 1.15em; }
+.message.assistant h3 { font-size: 1.05em; }
+.message.assistant ul, .message.assistant ol { margin: 0.3em 0; padding-left: 1.4em; }
+.message.assistant li { margin: 0.15em 0; line-height: 1.5; }
+.message.assistant li > p { margin: 0.2em 0; }
+.message.assistant code { background: #e8e8e8; padding: 1px 5px; border-radius: 3px; font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace; font-size: 0.9em; word-break: break-word; }
+.message.assistant pre { background: #1e1e1e; color: #d4d4d4; padding: 10px 12px; border-radius: 6px; overflow-x: auto; margin: 0.5em 0; font-size: 12px; line-height: 1.45; }
+.message.assistant pre code { background: none; padding: 0; color: inherit; font-size: inherit; word-break: normal; }
+.message.assistant blockquote { border-left: 3px solid #ccc; padding: 4px 12px; margin: 0.4em 0; color: #555; background: #f9f9f9; border-radius: 0 4px 4px 0; }
+.message.assistant blockquote p { margin: 0.2em 0; }
+.message.assistant a { color: #0969da; text-decoration: none; }
+.message.assistant a:hover { text-decoration: underline; }
+.message.assistant hr { border: none; border-top: 1px solid #ddd; margin: 0.8em 0; }
+.message.assistant table { border-collapse: collapse; width: 100%; margin: 0.5em 0; font-size: 12px; }
+.message.assistant th, .message.assistant td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; }
+.message.assistant th { background: #f6f6f6; font-weight: 600; }
+.message.assistant img { max-width: 100%; border-radius: 4px; }
+.message.assistant strong { font-weight: 600; }
+.message.assistant em { font-style: italic; }
 #prompt-form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #ddd; position: sticky; bottom: 0; background: white; }
 #prompt { flex: 1; }
 #cwd-display { font-family: monospace; font-size: 12px; color: #555; }

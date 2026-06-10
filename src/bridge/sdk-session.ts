@@ -113,7 +113,21 @@ export function createBrowserToolDefinitions(sdk: Pick<PiSdkModuleLike, 'defineT
     name,
     description: `Execute browser tool ${bridgeTool} through the Pi Web UI Chrome bridge.`,
     parameters: { type: 'object', additionalProperties: true },
-    execute: (params: JsonObject = {}) => executor.execute(bridgeTool, params),
+    execute: async (_toolCallId: string, params: JsonObject = {}) => {
+      try {
+        const result = await executor.execute(bridgeTool, params);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result) }],
+          details: result,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: 'text', text: `Error: ${message}` }],
+          isError: true,
+        };
+      }
+    },
   }));
 }
 

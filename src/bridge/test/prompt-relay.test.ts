@@ -177,6 +177,115 @@ describe('bridge prompt relay', () => {
     expect(promptCalls).toEqual([{ text: 'Early prompt' }]);
   });
 
+  it('survives SDK subscription callback throwing and still sends prompt_sent', async () => {
+    let subscribeCallback: ((event: Record<string, unknown>) => void) | undefined;
+    const sdkHost = {
+      create: vi.fn().mockResolvedValue({
+        prompt: vi.fn().mockImplementation((text: string) => {
+          // Simulate SDK emitting events synchronously during prompt
+          if (subscribeCallback) {
+            subscribeCallback({ type: 'message_end', message: { role: 'assistant', content: undefined } });
+          }
+          return Promise.resolve();
+        }),
+        subscribe: vi.fn((cb) => {
+          subscribeCallback = cb;
+          return () => {};
+        }),
+      }),
+    };
+
+    const app = createBridgeApp({
+      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      sdkHost,
+    });
+    const httpServer = createServer();
+    attachWebSocketServer(httpServer, app);
+    servers.push(httpServer);
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    const address = httpServer.address();
+    if (typeof address !== 'object' || address === null) throw new Error('missing server address');
+
+    const ws = new WebSocket(`ws://127.0.0.1:${address.port}`);
+    servers.push(ws);
+    await new Promise<void>((resolve) => ws.once('open', resolve));
+
+    // Wait for SDK to be ready
+    await app.ready;
+
+    // Collect messages: prompt_received + session_state + prompt_sent
+    const allMessages = collectMessages(ws, 3);
+    ws.send(JSON.stringify({ type: 'prompt', message: 'Test' }));
+
+    const messages = await allMessages;
+    expect(messages).toHaveLength(3);
+    expect(messages[0]).toMatchObject({ type: 'prompt_received', message: 'Test' });
+    expect(messages[1]).toMatchObject({ type: 'session_state' });
+    // prompt_sent should arrive even if subscription callback threw
+    expect(messages[2]).toMatchObject({ type: 'prompt_sent', message: 'Test' });
+  });
+
+  it('survives broadcast throwing inside subscription callback and still sends prompt_sent', async () => {
+    let subscribeCallback: ((event: Record<string, unknown>) => void) | undefined;
+    const sdkHost = {
+      create: vi.fn().mockResolvedValue({
+        prompt: vi.fn().mockImplementation((text: string) => {
+          if (subscribeCallback) {
+            subscribeCallback({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'Hello' }] } });
+          }
+          return Promise.resolve();
+        }),
+        subscribe: vi.fn((cb) => {
+          subscribeCallback = cb;
+          return () => {};
+        }),
+      }),
+    };
+
+    const app = createBridgeApp({
+      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      sdkHost,
+    });
+
+    // Intercept broadcast to simulate a throw during message_end processing
+    const originalBroadcast = app.browserClients.broadcast.bind(app.browserClients);
+    let broadcastCount = 0;
+    app.browserClients.broadcast = (msg: unknown) => {
+      broadcastCount++;
+      const msgType = (msg as Record<string, unknown>)?.type;
+      if (msgType === 'assistant_message') {
+        // Simulate broadcast throwing during the subscription callback
+        throw new Error('content is not iterable');
+      }
+      return originalBroadcast(msg as Parameters<typeof originalBroadcast>[0]);
+    };
+
+    const httpServer = createServer();
+    attachWebSocketServer(httpServer, app);
+    servers.push(httpServer);
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    const address = httpServer.address();
+    if (typeof address !== 'object' || address === null) throw new Error('missing server address');
+
+    const ws = new WebSocket(`ws://127.0.0.1:${address.port}`);
+    servers.push(ws);
+    await new Promise<void>((resolve) => ws.once('open', resolve));
+
+    await app.ready;
+
+    // Collect messages: prompt_received + session_state + prompt_sent
+    // (assistant_message broadcast throws and is caught, so it never reaches WebSocket)
+    const allMessages = collectMessages(ws, 3);
+    ws.send(JSON.stringify({ type: 'prompt', message: 'Test' }));
+
+    const messages = await allMessages;
+    expect(messages).toHaveLength(3);
+    expect(messages[0]).toMatchObject({ type: 'prompt_received', message: 'Test' });
+    expect(messages[1]).toMatchObject({ type: 'session_state' });
+    // Should get prompt_sent, NOT prompt_error, even though broadcast threw inside callback
+    expect(messages[2]).toMatchObject({ type: 'prompt_sent', message: 'Test' });
+  });
+
   it('sends prompt_error when SDK initialization fails', async () => {
     const sdkHost = {
       create: vi.fn().mockRejectedValue(new Error('Model not found')),

@@ -12,6 +12,18 @@ export type ClientCommand =
   | { type: 'set_storage_access'; enabled: boolean }
   | { type: 'extension_ui_response'; id: string; value: unknown };
 
+export type ServerEvent =
+  | { type: 'session_state'; session: unknown }
+  | { type: 'prompt_received'; message: string }
+  | { type: 'prompt_sent'; message: string }
+  | { type: 'prompt_error'; message: string; error: string }
+  | { type: 'assistant_message'; text: string }
+  | { type: 'tool_call'; name: string; params: unknown }
+  | { type: 'tool_result'; name: string; result: unknown }
+  | { type: 'extension_ui_request'; id: string; kind: string; message: string; options?: unknown }
+  | { type: 'extension_ui_notify'; message: string }
+  | { type: 'bridge_error'; error: string };
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

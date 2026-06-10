@@ -170,4 +170,13 @@ describe('bridge process manager', () => {
     const path = defaultBridgeEntryPath();
     expect(path).toContain('bridge/server.js');
   });
+
+  it('fallback path should not contain src/dist pattern', async () => {
+    // Regression test: the fallback path when dist doesn't exist but src does
+    // should resolve to <project-root>/dist/bridge/server.js, not <project-root>/src/dist/bridge/server.js
+    const { defaultBridgeEntryPath } = await import('../bridge-process.js');
+    const path = defaultBridgeEntryPath();
+    // The path should never contain '/src/dist/' - that's a bug
+    expect(path).not.toMatch(/src\/dist\//);
+  });
 });

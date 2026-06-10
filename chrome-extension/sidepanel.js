@@ -2,6 +2,7 @@ import { createBridgeClient } from './bridge-client.js';
 import { createInitialState, reduceSidePanelState } from './sidepanel-state.js';
 import { createToolExecutor } from './tool-executor.js';
 import { resolveCwdPath } from './cwd-picker.js';
+import { renderMarkdown } from './markdown-renderer.js';
 
 let state = createInitialState();
 let client;
@@ -76,7 +77,11 @@ function render() {
   for (const message of state.messages) {
     const item = document.createElement('div');
     item.className = `message ${message.role}`;
-    item.textContent = message.text;
+    if (message.role === 'assistant') {
+      item.innerHTML = renderMarkdown(message.text);
+    } else {
+      item.textContent = message.text;
+    }
     els.messages.append(item);
   }
   // Scroll to bottom of messages

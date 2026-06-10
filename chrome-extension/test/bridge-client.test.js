@@ -159,4 +159,57 @@ describe('extension bridge client', () => {
     expect(() => client.sendCommand({ type: 'prompt', message: 'test' }))
       .toThrow('Bridge websocket is not connected');
   });
+
+  it('forwards tool_call broadcast to onEvent without sending tool_response', async () => {
+    const listeners = {};
+    const sent = [];
+    class FakeWebSocket {
+      constructor() { this.readyState = 1; }
+      addEventListener(name, handler) { listeners[name] = handler; }
+      send(message) { sent.push(message); }
+      close() {}
+    }
+    const onEvent = vi.fn();
+    const client = createBridgeClient({
+      WebSocketCtor: FakeWebSocket,
+      port: 43117,
+      executeTool: async () => ({ result: 'ok' }),
+      onEvent,
+    });
+    client.connect();
+
+    await listeners.message({
+      data: JSON.stringify({ type: 'tool_call', name: 'browser_list_tabs', params: {} }),
+    });
+
+    // tool_call is a one-way broadcast from bridge for UI display only
+    // Chrome extension should NOT send tool_response back
+    expect(onEvent).toHaveBeenCalledWith({ type: 'tool_call', name: 'browser_list_tabs', params: {} });
+    expect(sent).toEqual([]);
+  });
+
+  it('forwards tool_result broadcast to onEvent', async () => {
+    const listeners = {};
+    const sent = [];
+    class FakeWebSocket {
+      constructor() { this.readyState = 1; }
+      addEventListener(name, handler) { listeners[name] = handler; }
+      send(message) { sent.push(message); }
+      close() {}
+    }
+    const onEvent = vi.fn();
+    const client = createBridgeClient({
+      WebSocketCtor: FakeWebSocket,
+      port: 43117,
+      onEvent,
+    });
+    client.connect();
+
+    await listeners.message({
+      data: JSON.stringify({ type: 'tool_result', name: 'browser_list_tabs', result: { tabs: [] } }),
+    });
+
+    expect(onEvent).toHaveBeenCalledWith({ type: 'tool_result', name: 'browser_list_tabs', result: { tabs: [] } });
+    expect(sent).toEqual([]);
+  });
 });
