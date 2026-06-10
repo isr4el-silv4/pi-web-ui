@@ -79,7 +79,8 @@ export function createToolExecutor(chromeApi = chrome, captures = {}) {
         try {
           await attachAndNotify(tabId);
         } catch {
-          // DevTools may be open on this tab
+          // DevTools may be open or chrome:// page — notify sidepanel
+          captures.onAttachFailed?.(tabId);
         }
       }
     });

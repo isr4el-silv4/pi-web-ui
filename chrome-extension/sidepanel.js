@@ -125,6 +125,12 @@ function dispatch(event) {
 const toolExecutor = createToolExecutor(undefined, {
   onAttach: (tabId, title) => {
     dispatch({ type: 'debugger_attached', tabId, title });
+    // If this is the active tab, resolve any pending conflict
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (tab?.id === tabId) {
+        dispatch({ type: 'devtools_conflict_resolved' });
+      }
+    });
   },
   onDetach: (tabId, reason) => {
     dispatch({ type: 'debugger_detached', tabId });
@@ -142,16 +148,14 @@ const toolExecutor = createToolExecutor(undefined, {
       }
     });
   },
-});
-
-// Check for DevTools conflict on tab activation
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  const tab = await chrome.tabs.get(activeInfo.tabId);
-  if (!toolExecutor.isAttached(tab.id)) {
-    dispatch({ type: 'devtools_conflict' });
-  } else {
-    dispatch({ type: 'devtools_conflict_resolved' });
-  }
+  onAttachFailed: (tabId) => {
+    // Auto-attach failed on a newly activated tab — show conflict if it's active
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (tab?.id === tabId) {
+        dispatch({ type: 'devtools_conflict' });
+      }
+    });
+  },
 });
 
 client = createBridgeClient({

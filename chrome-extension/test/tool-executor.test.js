@@ -231,6 +231,34 @@ describe('chrome browser tool executor', () => {
     expect(onAttach).not.toHaveBeenCalled();
   });
 
+  it('calls onAttachFailed when auto-attach to a new tab fails', async () => {
+    let onActivatedListener;
+    const attachFn = vi.fn().mockRejectedValue(new Error('Target closed'));
+    const sendCommandFn = vi.fn().mockResolvedValue(undefined);
+    const onAttachFailed = vi.fn();
+
+    const chrome = {
+      tabs: {
+        query: vi.fn(async () => [{ id: 1, title: 'Test' }]),
+        get: vi.fn(async (id) => ({ id, title: 'Test Tab' })),
+        onActivated: { addListener: vi.fn((fn) => { onActivatedListener = fn; }) },
+      },
+      debugger: {
+        attach: attachFn,
+        detach: vi.fn(),
+        sendCommand: sendCommandFn,
+        onDetach: { addListener: vi.fn() },
+      },
+    };
+    createToolExecutor(chrome, { skipAttachEvents: true, onAttachFailed });
+
+    // Simulate tab activation
+    onActivatedListener({ tabId: 2, windowId: 1 });
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(onAttachFailed).toHaveBeenCalledWith(2);
+  });
+
   it('auto-attaches debugger before sendCdpCommand if not already attached', async () => {
     const attachFn = vi.fn().mockResolvedValue(undefined);
     const sendCommandFn = vi.fn().mockResolvedValue({ result: 'ok' });
