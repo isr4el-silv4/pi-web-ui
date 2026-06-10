@@ -4,6 +4,8 @@ import { evaluateBrowserToolPermission } from './permissions.js';
 export interface BrowserToolTransport {
   requestBrowserTool(tool: BrowserToolName, params: JsonObject): Promise<JsonValue | undefined>;
   confirm?(message: string): Promise<boolean>;
+  input?(message: string): Promise<string>;
+  notify?(message: string): void;
   audit?: { record(entry: { action: string; params?: unknown }): void };
 }
 

@@ -230,4 +230,79 @@ describe('chrome browser tool executor', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(onAttach).not.toHaveBeenCalled();
   });
+
+  it('auto-attaches debugger before sendCdpCommand if not already attached', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue({ result: 'ok' });
+    const chrome = {
+      tabs: {
+        query: vi.fn(async () => [{ id: 1, title: 'Test' }]),
+        get: vi.fn(async (id) => ({ id, title: 'Test Tab' })),
+      },
+      debugger: { attach: attachFn, detach: vi.fn(), sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    // Wait for initial auto-attach
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Reset call counts after initial attach
+    attachFn.mockClear();
+    sendCommandFn.mockClear();
+
+    const result = await executor.execute('debugger.sendCdpCommand', { method: 'Page.navigate', params: { url: 'https://example.com' } });
+    // Since already attached, attachFn should NOT be called again
+    expect(attachFn).not.toHaveBeenCalled();
+    expect(sendCommandFn).toHaveBeenCalledWith({ tabId: 1 }, 'Page.navigate', { url: 'https://example.com' });
+  });
+
+  it('auto-attaches debugger before evaluateScript if not already attached', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue({ result: { value: 42 } });
+    const chrome = {
+      tabs: {
+        query: vi.fn(async () => [{ id: 1, title: 'Test' }]),
+        get: vi.fn(async (id) => ({ id, title: 'Test Tab' })),
+      },
+      debugger: { attach: attachFn, detach: vi.fn(), sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Reset call counts after initial attach
+    attachFn.mockClear();
+    sendCommandFn.mockClear();
+
+    const result = await executor.execute('debugger.evaluateScript', { expression: '2 + 2' });
+    // Since already attached, attachFn should NOT be called again
+    expect(attachFn).not.toHaveBeenCalled();
+    expect(sendCommandFn).toHaveBeenCalledWith({ tabId: 1 }, 'Runtime.evaluate', { expression: '2 + 2', returnByValue: true });
+  });
+
+  it('does not re-attach if debugger is already attached for sendCdpCommand', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue({ result: 'ok' });
+    const chrome = {
+      tabs: {
+        query: vi.fn(async () => [{ id: 1, title: 'Test' }]),
+        get: vi.fn(async (id) => ({ id, title: 'Test Tab' })),
+      },
+      debugger: { attach: attachFn, detach: vi.fn(), sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(executor.isAttached(1)).toBe(true);
+
+    // Reset call counts
+    attachFn.mockClear();
+    sendCommandFn.mockClear();
+
+    await executor.execute('debugger.sendCdpCommand', { method: 'Page.navigate', params: { url: 'https://example.com' } });
+
+    // attach should NOT be called again since already attached
+    expect(attachFn).not.toHaveBeenCalled();
+    expect(sendCommandFn).toHaveBeenCalledWith({ tabId: 1 }, 'Page.navigate', { url: 'https://example.com' });
+  });
 });

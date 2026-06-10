@@ -128,14 +128,20 @@ export function createToolExecutor(chromeApi = chrome, captures = {}) {
         case 'network.stopCapture': return networkCapture.stop();
         case 'network.getRequests': return { requests: networkCapture.getRequests() };
         case 'network.getRequest': return networkCapture.getRequest(params.requestId);
-        case 'network.getResponseBody': return networkCapture.getResponseBody(params.requestId) ?? debuggerClient.sendCdpCommand(tabId, 'Network.getResponseBody', { requestId: params.requestId });
         case 'cookies.get': return cookiesClient.getCookies(params);
         case 'storage.getLocal': return storageClient.getLocalStorage(tabId);
         case 'storage.getSession': return storageClient.getSessionStorage(tabId);
         case 'debugger.evaluateScript':
+          if (!attachedTabs.has(tabId)) await attachAndNotify(tabId);
           return debuggerClient.sendCdpCommand(tabId, 'Runtime.evaluate', { expression: params.expression, returnByValue: true });
         case 'debugger.sendCdpCommand':
+          if (!attachedTabs.has(tabId)) await attachAndNotify(tabId);
           return debuggerClient.sendCdpCommand(tabId, params.method, params.params ?? {});
+        case 'network.getResponseBody':
+          if (!attachedTabs.has(tabId)) {
+            try { await attachAndNotify(tabId); } catch { /* may fail if DevTools open */ }
+          }
+          return networkCapture.getResponseBody(params.requestId) ?? debuggerClient.sendCdpCommand(tabId, 'Network.getResponseBody', { requestId: params.requestId });
         case 'debugger.attach':
           await attachAndNotify(tabId);
           return { attached: true };

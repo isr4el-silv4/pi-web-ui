@@ -6,9 +6,11 @@ import { createSessionRegistry } from './session-registry.js';
 import { parseStartContext, type BridgeStartContext } from './start-context.js';
 import { attachWebSocketServer } from './websocket-server.js';
 import { createDefaultPiSdkAdapter, createSdkSessionHost, type SdkAdapter } from './sdk-session.js';
+import { createExtensionUiAdapter, type UiResponse } from './extension-ui-adapter.js';
 
-export function createBridgeApp(options: { context: BridgeStartContext; pid?: number; sdkHost?: { create(options: { cwd: string; sessionPath?: string }): Promise<unknown> }; ui?: { respond(response: { id: string; value: unknown }): boolean } }) {
+export function createBridgeApp(options: { context: BridgeStartContext; pid?: number; sdkHost?: { create(options: { cwd: string; sessionPath?: string }): Promise<unknown> }; ui?: { respond(response: UiResponse): boolean } }) {
   const clients = createBrowserClientRegistry();
+  const uiAdapter = createExtensionUiAdapter({ broadcast: (msg) => clients.broadcast(msg as JsonObject) });
   const sessions = createSessionRegistry();
   sessions.createSession(options.context);
   let sdkSession: unknown;
@@ -59,7 +61,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
   const transport = {
     requestBrowserTool: async (tool: string, params: JsonObject) => {
       const session = sessions.getCurrentSession() ?? { id: 'default', cwd: options.context.cwd, permissionMode: options.context.permissionMode, cookieAccessEnabled: options.context.cookieAccessEnabled, storageAccessEnabled: options.context.storageAccessEnabled };
-      const executor = createBrowserToolExecutor(clients, session);
+      const executor = createBrowserToolExecutor({ ...clients, confirm: uiAdapter.confirm, input: uiAdapter.input, notify: uiAdapter.notify }, session);
       return executor.execute(tool, params);
     },
   };
@@ -181,7 +183,9 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           clients.broadcast({ type: 'abort_received' });
           return sessions.getCurrentSession();
         case 'extension_ui_response':
-          return { handled: options.ui?.respond({ id: command.id, value: command.value }) ?? false };
+          const handledByUi = options.ui?.respond({ id: command.id, value: command.value });
+          const handledByAdapter = uiAdapter.respond({ id: command.id, value: command.value });
+          return { handled: handledByUi ?? handledByAdapter };
       }
     },
     async executeBrowserTool(tool: string, params: JsonObject): Promise<JsonValue | undefined> {
