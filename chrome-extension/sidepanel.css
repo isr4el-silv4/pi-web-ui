@@ -1,4 +1,5 @@
 body { margin: 0; font: 13px system-ui, sans-serif; color: #111; overflow-x: hidden; }
+*, *::before, *::after { box-sizing: border-box; }
 header { padding: 12px; border-bottom: 1px solid #ddd; overflow-wrap: break-word; }
 h1 { font-size: 16px; margin: 0 0 8px; }
 #status { font-weight: 600; overflow-wrap: break-word; }
@@ -6,7 +7,7 @@ main { padding: 12px; overflow-wrap: break-word; }
 #offline { background: #fff4ce; padding: 10px; border-radius: 6px; overflow-wrap: break-word; }
 #session { display: grid; gap: 8px; margin-bottom: 12px; }
 #messages { display: grid; gap: 8px; overflow-wrap: break-word; }
-.message { padding: 8px; border-radius: 6px; background: #f2f2f2; white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; }
+.message { padding: 8px; border-radius: 6px; background: #f2f2f2; white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; max-width: 100%; box-sizing: border-box; }
 .message.user { background: #e8f0fe; white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; }
 .message.assistant { white-space: normal; overflow-wrap: break-word; word-break: break-word; }
 .message.assistant > :first-child { margin-top: 0; }
@@ -22,7 +23,7 @@ main { padding: 12px; overflow-wrap: break-word; }
 .message.assistant li { margin: 0.15em 0; line-height: 1.5; overflow-wrap: break-word; word-break: break-word; }
 .message.assistant li > p { margin: 0.2em 0; }
 .message.assistant code { background: #e8e8e8; padding: 1px 5px; border-radius: 3px; font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace; font-size: 0.9em; word-break: break-all; overflow-wrap: break-word; }
-.message.assistant pre { background: #1e1e1e; color: #d4d4d4; padding: 10px 12px; border-radius: 6px; overflow-x: auto; margin: 0.5em 0; font-size: 12px; line-height: 1.45; }
+.message.assistant pre { background: #1e1e1e; color: #d4d4d4; padding: 10px 12px; border-radius: 6px; overflow-x: auto; margin: 0.5em 0; font-size: 12px; line-height: 1.45; max-width: 100%; box-sizing: border-box; }
 .message.assistant pre code { background: none; padding: 0; color: inherit; font-size: inherit; word-break: normal; }
 .message.assistant blockquote { border-left: 3px solid #ccc; padding: 4px 12px; margin: 0.4em 0; color: #555; background: #f9f9f9; border-radius: 0 4px 4px 0; overflow-wrap: break-word; word-break: break-word; }
 .message.assistant blockquote p { margin: 0.2em 0; }
