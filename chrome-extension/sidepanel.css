@@ -1,29 +1,26 @@
 body { margin: 0; font: 13px system-ui, sans-serif; color: #111; overflow-x: hidden; }
 *, *::before, *::after { box-sizing: border-box; }
 
-/* Fixed header bar for attached tabs */
-.attached-tabs-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  background: #f6f8fa;
+/* Header bar */
+header {
+  padding: 10px 12px;
   border-bottom: 1px solid #ddd;
-  padding: 6px 12px;
-  font-size: 12px;
+  background: #f6f8fa;
+  overflow-wrap: break-word;
+}
+
+.header-top {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
-.attached-tabs-label {
-  font-weight: 600;
-  color: #555;
-  margin-bottom: 2px;
-}
+h1 { font-size: 16px; margin: 0; }
+#status { font-size: 12px; font-weight: 600; color: #555; overflow-wrap: break-word; }
 
-#attached-tabs-list {
+.attached-tabs-list {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -75,9 +72,6 @@ body { margin: 0; font: 13px system-ui, sans-serif; color: #111; overflow-x: hid
   overflow-wrap: break-word;
 }
 
-header { padding: 12px; border-bottom: 1px solid #ddd; overflow-wrap: break-word; }
-h1 { font-size: 16px; margin: 0 0 8px; }
-#status { font-weight: 600; overflow-wrap: break-word; }
 main { padding: 12px; overflow-wrap: break-word; }
 #offline { background: #fff4ce; padding: 10px; border-radius: 6px; overflow-wrap: break-word; }
 #session { display: grid; gap: 8px; margin-bottom: 12px; }

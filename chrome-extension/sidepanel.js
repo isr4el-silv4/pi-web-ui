@@ -26,7 +26,6 @@ const els = {
   storage: document.querySelector('#storage'),
   mode: document.querySelector('#mode'),
   devtoolsWarning: document.querySelector('#devtools-warning'),
-  attachedTabsBar: document.querySelector('#attached-tabs-bar'),
   attachedTabsList: document.querySelector('#attached-tabs-list'),
 };
 
@@ -91,9 +90,9 @@ function render() {
   // Scroll to bottom of messages
   els.messages.scrollTop = els.messages.scrollHeight;
 
-  // Render attached tabs bar
+  // Render attached tabs list
   console.log(`[SidePanel] render: attachedTabs=${JSON.stringify(state.attachedTabs.map(t => ({ id: t.id, title: t.title })))}`);
-  els.attachedTabsBar.hidden = state.attachedTabs.length === 0;
+  els.attachedTabsList.style.display = state.attachedTabs.length === 0 ? 'none' : 'flex';
   els.attachedTabsList.innerHTML = '';
   for (const tab of state.attachedTabs) {
     const chip = document.createElement('span');

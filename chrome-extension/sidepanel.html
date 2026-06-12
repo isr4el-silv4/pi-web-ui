@@ -7,13 +7,12 @@
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
-    <div id="attached-tabs-bar" class="attached-tabs-bar" hidden>
-      <span class="attached-tabs-label">Debugger active:</span>
-      <div id="attached-tabs-list"></div>
-    </div>
-    <header>
-      <h1>Pi Web UI</h1>
-      <div id="status">Bridge offline</div>
+    <header id="attached-tabs-bar">
+      <div class="header-top">
+        <h1>Pi Web UI</h1>
+        <div id="status">Bridge offline</div>
+      </div>
+      <div id="attached-tabs-list" class="attached-tabs-list"></div>
     </header>
     <main>
       <section id="offline">Start Pi Web UI from terminal Pi with: <code>/pi-web-ui start</code></section>
