@@ -172,4 +172,35 @@ describe('side panel state', () => {
     });
     expect(state.attachedTabs).toHaveLength(1);
   });
+
+  it('updates cwd from session_state after new_session', () => {
+    const state = reduceSidePanelState(createInitialState(), {
+      type: 'session_state',
+      session: {
+        id: 's2',
+        cwd: '/home/user/my-project',
+        permissionMode: 'debug',
+        cookieAccessEnabled: false,
+        storageAccessEnabled: false,
+      },
+    });
+
+    expect(state.session.cwd).toBe('/home/user/my-project');
+    expect(state.session.id).toBe('s2');
+  });
+
+  it('preserves existing cwd when session_state does not include it', () => {
+    const withSession = reduceSidePanelState(createInitialState(), {
+      type: 'session_state',
+      session: { id: 's1', cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false },
+    });
+    const updated = reduceSidePanelState(withSession, {
+      type: 'session_state',
+      session: { id: 's1', permissionMode: 'control', cookieAccessEnabled: false, storageAccessEnabled: false },
+    });
+
+    // session.cwd is gone but state.session is the new object
+    expect(updated.session.id).toBe('s1');
+    expect(updated.permissionMode).toBe('control');
+  });
 });

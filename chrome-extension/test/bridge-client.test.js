@@ -212,4 +212,14 @@ describe('extension bridge client', () => {
     expect(onEvent).toHaveBeenCalledWith({ type: 'tool_result', name: 'browser_list_tabs', result: { tabs: [] } });
     expect(sent).toEqual([]);
   });
+
+  it('sends new_session command with cwd', () => {
+    const { FakeWebSocket, sent } = createFakeWebSocket();
+    const client = createBridgeClient({ WebSocketCtor: FakeWebSocket, port: 43117 });
+    client.connect();
+
+    client.sendCommand({ type: 'new_session', cwd: '/home/user/my-project' });
+
+    expect(sent).toEqual([JSON.stringify({ type: 'new_session', cwd: '/home/user/my-project' })]);
+  });
 });

@@ -21,7 +21,6 @@ const els = {
   cwdPicker: document.querySelector('#cwd-picker'),
   cwdWarning: document.querySelector('#cwd-warning'),
   cwdInput: document.querySelector('#cwd-input'),
-  newSession: document.querySelector('#new-session'),
   cookies: document.querySelector('#cookies'),
   storage: document.querySelector('#storage'),
   mode: document.querySelector('#mode'),
@@ -220,6 +219,13 @@ els.cwdPicker.addEventListener('click', async () => {
     if (!isAbsolute) {
       els.cwdInput.value = path;
     }
+
+    // Auto-create new session with the picked directory
+    if (!state.bridgeOnline) {
+      dispatch({ type: 'bridge_error', error: 'Bridge is offline — cannot create session' });
+      return;
+    }
+    client.sendCommand({ type: 'new_session', cwd: path });
   } catch {
     // User cancelled or API not available
   }
@@ -231,10 +237,6 @@ els.cwdInput.addEventListener('input', () => {
   els.cwdDisplay.textContent = els.cwdInput.value || 'not set';
 });
 
-els.newSession.addEventListener('click', () => {
-  const cwd = els.cwdInput.hidden ? (selectedCwd || '/') : (els.cwdInput.value || selectedCwd || '/');
-  client.sendCommand({ type: 'new_session', cwd });
-});
 els.cookies.addEventListener('change', () => client.sendCommand({ type: 'set_cookie_access', enabled: els.cookies.checked }));
 els.storage.addEventListener('change', () => client.sendCommand({ type: 'set_storage_access', enabled: els.storage.checked }));
 els.mode.addEventListener('change', () => client.sendCommand({ type: 'set_permission_mode', mode: els.mode.value }));
