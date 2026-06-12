@@ -15,6 +15,7 @@ export type BrowserToolName =
   | 'network.getResponseBody'
   | 'debugger.attach'
   | 'debugger.detach'
+  | 'debugger.getAttachedTabs'
   | 'debugger.sendCdpCommand'
   | 'debugger.evaluateScript'
   | 'cookies.get'

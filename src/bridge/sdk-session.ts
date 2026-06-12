@@ -77,28 +77,45 @@ interface PiSdkModuleLike {
   initTheme?: (...args: unknown[]) => void;
 }
 
-const browserToolMap: Record<string, string> = {
-  browser_list_tabs: 'tabs.list',
-  browser_get_current_tab: 'tabs.getCurrent',
-  browser_get_page_html: 'page.getHtml',
-  browser_get_page_text: 'page.getText',
-  browser_get_selection: 'page.getSelection',
-  browser_capture_screenshot: 'page.captureScreenshot',
-  browser_get_console_logs: 'console.getLogs',
-  browser_clear_console_log_buffer: 'console.clearLogBuffer',
-  browser_start_network_capture: 'network.startCapture',
-  browser_stop_network_capture: 'network.stopCapture',
-  browser_get_network_requests: 'network.getRequests',
-  browser_get_network_request: 'network.getRequest',
-  browser_get_network_response_body: 'network.getResponseBody',
-  browser_attach_debugger: 'debugger.attach',
-  browser_detach_debugger: 'debugger.detach',
-  browser_send_cdp_command: 'debugger.sendCdpCommand',
-  browser_evaluate_script: 'debugger.evaluateScript',
-  browser_get_cookies: 'cookies.get',
-  browser_get_local_storage: 'storage.getLocal',
-  browser_get_session_storage: 'storage.getSession',
+const browserToolDescriptions: Record<string, { tool: string; description: string }> = {
+  browser_list_tabs: { tool: 'tabs.list', description: 'List all open browser tabs.' },
+  browser_get_current_tab: { tool: 'tabs.getCurrent', description: 'Get the currently active browser tab. Returns a debuggerAttached boolean indicating whether the Chrome debugger is attached to this tab. If debuggerAttached is false, use browser_attach_debugger to attach to this tab first, or use browser_get_attached_tabs to see which tabs are being debugged.' },
+  browser_get_page_html: { tool: 'page.getHtml', description: 'Get the full HTML of the current page.' },
+  browser_get_page_text: { tool: 'page.getText', description: 'Get the visible text content of the current page.' },
+  browser_get_selection: { tool: 'page.getSelection', description: 'Get the currently selected text on the page.' },
+  browser_capture_screenshot: { tool: 'page.captureScreenshot', description: 'Capture a screenshot of the current tab.' },
+  browser_get_console_logs: {
+    tool: 'console.getLogs',
+    description: 'Get console logs from the browser. Console capture is automatically enabled when the debugger attaches — do NOT call browser_start_network_capture first, just call this directly.',
+  },
+  browser_clear_console_log_buffer: { tool: 'console.clearLogBuffer', description: 'Clear the buffered console logs.' },
+  browser_start_network_capture: {
+    tool: 'network.startCapture',
+    description: 'Start network request capture. Network capture is automatically enabled when the debugger attaches — you typically do NOT need to call this. Only call it if you previously stopped capture with browser_stop_network_capture and want to resume.',
+  },
+  browser_stop_network_capture: {
+    tool: 'network.stopCapture',
+    description: 'Stop network request capture. Use sparingly — capture is auto-enabled on debugger attach.',
+  },
+  browser_get_network_requests: {
+    tool: 'network.getRequests',
+    description: 'Get all captured network requests. Network capture is automatically enabled when the debugger attaches — do NOT call browser_start_network_capture first, just call this directly to get the requests.',
+  },
+  browser_get_network_request: { tool: 'network.getRequest', description: 'Get details for a specific network request by requestId.' },
+  browser_get_network_response_body: { tool: 'network.getResponseBody', description: 'Get the response body for a specific network request by requestId.' },
+  browser_attach_debugger: { tool: 'debugger.attach', description: 'Attach the Chrome debugger to a tab. Automatically enables network and console capture.' },
+  browser_detach_debugger: { tool: 'debugger.detach', description: 'Detach the Chrome debugger from a tab.' },
+  browser_get_attached_tabs: { tool: 'debugger.getAttachedTabs', description: 'Get all tabs that currently have the debugger attached.' },
+  browser_send_cdp_command: { tool: 'debugger.sendCdpCommand', description: 'Send a raw Chrome DevTools Protocol command to the debugger.' },
+  browser_evaluate_script: { tool: 'debugger.evaluateScript', description: 'Evaluate JavaScript in the context of the current page.' },
+  browser_get_cookies: { tool: 'cookies.get', description: 'Get cookies for the current page or a specific domain.' },
+  browser_get_local_storage: { tool: 'storage.getLocal', description: 'Get localStorage entries for the current page.' },
+  browser_get_session_storage: { tool: 'storage.getSession', description: 'Get sessionStorage entries for the current page.' },
 };
+
+const browserToolMap: Record<string, string> = Object.fromEntries(
+  Object.entries(browserToolDescriptions).map(([name, { tool }]) => [name, tool]),
+);
 
 export function createSdkSessionHost(adapter: SdkAdapter) {
   return {
@@ -109,9 +126,9 @@ export function createSdkSessionHost(adapter: SdkAdapter) {
 }
 
 export function createBrowserToolDefinitions(sdk: Pick<PiSdkModuleLike, 'defineTool'>, executor: BrowserToolExecutorLike) {
-  return Object.entries(browserToolMap).map(([name, bridgeTool]) => sdk.defineTool({
+  return Object.entries(browserToolDescriptions).map(([name, { tool: bridgeTool, description }]) => sdk.defineTool({
     name,
-    description: `Execute browser tool ${bridgeTool} through the Pi Web UI Chrome bridge.`,
+    description,
     parameters: { type: 'object', additionalProperties: true },
     execute: async (_toolCallId: string, params: JsonObject = {}) => {
       try {

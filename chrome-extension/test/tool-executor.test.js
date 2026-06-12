@@ -333,4 +333,275 @@ describe('chrome browser tool executor', () => {
     expect(attachFn).not.toHaveBeenCalled();
     expect(sendCommandFn).toHaveBeenCalledWith({ tabId: 1 }, 'Page.navigate', { url: 'https://example.com' });
   });
+
+  it('returns empty array when no tabs have debugger attached', async () => {
+    const chrome = {
+      tabs: { query: vi.fn(async () => []) },
+      debugger: { attach: vi.fn(), detach: vi.fn(), sendCommand: vi.fn() },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    const result = await executor.execute('debugger.getAttachedTabs', {});
+    expect(result).toEqual({ attachedTabs: [] });
+  });
+
+  it('returns attached tabs with id and title', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue(undefined);
+    const chrome = {
+      tabs: {
+        query: vi.fn(async () => [{ id: 1, title: 'Test Tab' }]),
+        get: vi.fn(async (id) => ({ id, title: 'Test Tab' })),
+      },
+      debugger: { attach: attachFn, detach: vi.fn(), sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    // Wait for auto-attach
+    await new Promise((r) => setTimeout(r, 50));
+
+    const result = await executor.execute('debugger.getAttachedTabs', {});
+    expect(result).toEqual({ attachedTabs: [{ id: 1, title: 'Test Tab' }] });
+  });
+
+  it('returns multiple attached tabs', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue(undefined);
+    const chrome = {
+      tabs: {
+        query: vi.fn(async () => [{ id: 1, title: 'Tab One' }]),
+        get: vi.fn(async (id) => ({ id, title: id === 1 ? 'Tab One' : 'Tab Two' })),
+      },
+      debugger: { attach: attachFn, detach: vi.fn(), sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    // Wait for auto-attach of tab 1
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Manually attach tab 2
+    await executor.execute('debugger.attach', { tabId: 2 });
+    await new Promise((r) => setTimeout(r, 50));
+
+    const result = await executor.execute('debugger.getAttachedTabs', {});
+    expect(result.attachedTabs).toHaveLength(2);
+    expect(result.attachedTabs).toContainEqual({ id: 1, title: 'Tab One' });
+    expect(result.attachedTabs).toContainEqual({ id: 2, title: 'Tab Two' });
+  });
+
+  it('excludes detached tabs from getAttachedTabs result', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue(undefined);
+    const detachFn = vi.fn().mockResolvedValue(undefined);
+    const chrome = {
+      tabs: {
+        query: vi.fn(async () => [{ id: 1, title: 'Tab One' }]),
+        get: vi.fn(async (id) => ({ id, title: id === 1 ? 'Tab One' : 'Tab Two' })),
+      },
+      debugger: { attach: attachFn, detach: detachFn, sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    // Wait for auto-attach of tab 1
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Manually attach tab 2
+    await executor.execute('debugger.attach', { tabId: 2 });
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Detach tab 1
+    await executor.execute('debugger.detach', { tabId: 1 });
+
+    const result = await executor.execute('debugger.getAttachedTabs', {});
+    expect(result.attachedTabs).toHaveLength(1);
+    expect(result.attachedTabs[0].id).toBe(2);
+  });
+
+  it('network.startCapture sends Network.enable to all attached tabs', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue(undefined);
+    const chrome = {
+      tabs: {
+        query: vi.fn(async () => [{ id: 1, title: 'Tab' }]),
+        get: vi.fn(async (id) => ({ id, title: 'Tab' })),
+      },
+      debugger: { attach: attachFn, detach: vi.fn(), sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    // Wait for auto-attach of tab 1
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Clear calls from auto-attach
+    sendCommandFn.mockClear();
+
+    const result = await executor.execute('network.startCapture', {});
+    expect(result).toEqual({ capturing: true });
+    expect(sendCommandFn).toHaveBeenCalledWith({ tabId: 1 }, 'Network.enable', {});
+  });
+
+  it('network.stopCapture sends Network.disable to all attached tabs', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue(undefined);
+    const chrome = {
+      tabs: {
+        query: vi.fn(async () => [{ id: 1, title: 'Tab' }]),
+        get: vi.fn(async (id) => ({ id, title: 'Tab' })),
+      },
+      debugger: { attach: attachFn, detach: vi.fn(), sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    // Wait for auto-attach of tab 1
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Clear calls from auto-attach
+    sendCommandFn.mockClear();
+
+    const result = await executor.execute('network.stopCapture', {});
+    expect(result).toEqual({ capturing: false });
+    expect(sendCommandFn).toHaveBeenCalledWith({ tabId: 1 }, 'Network.disable', {});
+  });
+
+  it('console.getLogs sends Runtime.enable to the target tab', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue(undefined);
+    const chrome = {
+      tabs: {
+        query: vi.fn(async () => [{ id: 1, title: 'Tab' }]),
+        get: vi.fn(async (id) => ({ id, title: 'Tab' })),
+      },
+      debugger: { attach: attachFn, detach: vi.fn(), sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    // Wait for auto-attach of tab 1
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Clear calls from auto-attach
+    sendCommandFn.mockClear();
+
+    const result = await executor.execute('console.getLogs', {});
+    expect(result).toEqual({ logs: [] });
+    expect(sendCommandFn).toHaveBeenCalledWith({ tabId: 1 }, 'Runtime.enable', {});
+  });
+
+  it('network.startCapture handles no attached tabs gracefully', async () => {
+    const chrome = {
+      tabs: { query: vi.fn(async () => []) },
+      debugger: { attach: vi.fn(), detach: vi.fn(), sendCommand: vi.fn() },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    // Wait for auto-attach to fail (no tabs)
+    await new Promise((r) => setTimeout(r, 50));
+
+    const result = await executor.execute('network.startCapture', {});
+    expect(result).toEqual({ capturing: true });
+  });
+
+  it('network.startCapture sends Network.enable to multiple attached tabs', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue(undefined);
+    const chrome = {
+      tabs: {
+        query: vi.fn(async () => [{ id: 1, title: 'Tab 1' }]),
+        get: vi.fn(async (id) => ({ id, title: `Tab ${id}` })),
+      },
+      debugger: { attach: attachFn, detach: vi.fn(), sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    // Wait for auto-attach of tab 1
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Attach tab 2
+    await executor.execute('debugger.attach', { tabId: 2 });
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Clear calls from auto-attach and manual attach
+    sendCommandFn.mockClear();
+
+    const result = await executor.execute('network.startCapture', {});
+    expect(result).toEqual({ capturing: true });
+    expect(sendCommandFn).toHaveBeenCalledWith({ tabId: 1 }, 'Network.enable', {});
+    expect(sendCommandFn).toHaveBeenCalledWith({ tabId: 2 }, 'Network.enable', {});
+  });
+
+  it('tabs.getCurrent returns the visually active tab with debuggerAttached flag', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue(undefined);
+    const chrome = {
+      tabs: {
+        // Visually active tab is tab 99
+        query: vi.fn(async () => [{ id: 99, title: 'Pi Docs' }]),
+        // Debugger is attached to tab 1
+        get: vi.fn(async (id) => ({ id, title: id === 1 ? 'disler/the-verifier-agent' : 'Pi Docs' })),
+      },
+      debugger: { attach: attachFn, detach: vi.fn(), sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    // Wait for auto-attach of tab 99 (the active tab)
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Manually attach to tab 1 (simulating debugger on a different tab)
+    await executor.execute('debugger.attach', { tabId: 1 });
+    await new Promise((r) => setTimeout(r, 50));
+
+    // tabs.getCurrent should return the visually active tab (id: 99) with debuggerAttached: true
+    // (both tabs have debugger attached in this test)
+    const result = await executor.execute('tabs.getCurrent', {});
+    expect(result.id).toBe(99);
+    expect(result.title).toBe('Pi Docs');
+    expect(result.debuggerAttached).toBe(true);
+  });
+
+  it('tabs.getCurrent returns debuggerAttached: false when active tab has no debugger', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue(undefined);
+    const chrome = {
+      tabs: {
+        // Visually active tab is tab 99
+        query: vi.fn(async () => [{ id: 99, title: 'Pi Docs' }]),
+        get: vi.fn(async (id) => ({ id, title: id === 1 ? 'disler/the-verifier-agent' : 'Pi Docs' })),
+      },
+      debugger: { attach: attachFn, detach: vi.fn(), sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    // Wait for auto-attach of tab 99
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Detach from active tab
+    await executor.execute('debugger.detach', { tabId: 99 });
+
+    // tabs.getCurrent should return the visually active tab (id: 99) with debuggerAttached: false
+    const result = await executor.execute('tabs.getCurrent', {});
+    expect(result.id).toBe(99);
+    expect(result.title).toBe('Pi Docs');
+    expect(result.debuggerAttached).toBe(false);
+  });
+
+  it('tabs.getCurrent returns debuggerAttached: true when debugger is on the active tab', async () => {
+    const attachFn = vi.fn().mockResolvedValue(undefined);
+    const sendCommandFn = vi.fn().mockResolvedValue(undefined);
+    const chrome = {
+      tabs: {
+        query: vi.fn(async () => [{ id: 1, title: 'Debugged Tab' }]),
+        get: vi.fn(async (id) => ({ id, title: 'Debugged Tab' })),
+      },
+      debugger: { attach: attachFn, detach: vi.fn(), sendCommand: sendCommandFn },
+    };
+    const executor = createToolExecutor(chrome, { skipAttachEvents: true });
+
+    // Wait for auto-attach of tab 1
+    await new Promise((r) => setTimeout(r, 50));
+
+    const result = await executor.execute('tabs.getCurrent', {});
+    expect(result.id).toBe(1);
+    expect(result.debuggerAttached).toBe(true);
+  });
 });

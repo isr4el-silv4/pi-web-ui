@@ -92,6 +92,7 @@ function render() {
   els.messages.scrollTop = els.messages.scrollHeight;
 
   // Render attached tabs bar
+  console.log(`[SidePanel] render: attachedTabs=${JSON.stringify(state.attachedTabs.map(t => ({ id: t.id, title: t.title })))}`);
   els.attachedTabsBar.hidden = state.attachedTabs.length === 0;
   els.attachedTabsList.innerHTML = '';
   for (const tab of state.attachedTabs) {
@@ -124,6 +125,7 @@ function dispatch(event) {
 
 const toolExecutor = createToolExecutor(undefined, {
   onAttach: (tabId, title) => {
+    console.log(`[SidePanel] onAttach fired: tabId=${tabId}, title="${title}"`);
     dispatch({ type: 'debugger_attached', tabId, title });
     // If this is the active tab, resolve any pending conflict
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
@@ -133,6 +135,7 @@ const toolExecutor = createToolExecutor(undefined, {
     });
   },
   onDetach: (tabId, reason) => {
+    console.log(`[SidePanel] onDetach fired: tabId=${tabId}, reason=${reason}`);
     dispatch({ type: 'debugger_detached', tabId });
     // Check if this is the active tab for DevTools warning
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
@@ -142,6 +145,7 @@ const toolExecutor = createToolExecutor(undefined, {
     });
   },
   onReattach: (tabId) => {
+    console.log(`[SidePanel] onReattach fired: tabId=${tabId}`);
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (tab?.id === tabId) {
         dispatch({ type: 'devtools_conflict_resolved' });
@@ -149,6 +153,7 @@ const toolExecutor = createToolExecutor(undefined, {
     });
   },
   onAttachFailed: (tabId) => {
+    console.warn(`[SidePanel] onAttachFailed: tabId=${tabId}`);
     // Auto-attach failed on a newly activated tab — show conflict if it's active
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (tab?.id === tabId) {
