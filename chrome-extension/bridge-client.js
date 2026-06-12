@@ -8,6 +8,16 @@ export function createBridgeClient({ WebSocketCtor = WebSocket, port = 43117, on
       socket.addEventListener('open', () => {
         console.log('[BridgeClient] Connected!');
         onEvent({ type: 'bridge_connected' });
+        // Fetch session state from HTTP /status as a reliable source of truth
+        fetch(`http://127.0.0.1:${port}/status`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.session) {
+              console.log('[BridgeClient] Fetched session state from /status:', data.session);
+              onEvent({ type: 'session_state', session: data.session });
+            }
+          })
+          .catch((err) => console.error('[BridgeClient] Failed to fetch /status:', err));
       });
       socket.addEventListener('close', (e) => {
         console.log('[BridgeClient] Disconnected:', e.code, e.reason);

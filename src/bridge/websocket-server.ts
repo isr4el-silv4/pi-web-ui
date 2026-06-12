@@ -26,6 +26,13 @@ export function attachWebSocketServer(
       },
     });
 
+    // Send current session state immediately so the client can populate cwd, permission mode, etc.
+    const currentSession = app?.status()?.session;
+    if (currentSession && socket.readyState === 1) {
+      console.log('[Bridge] Sending initial session state to new client');
+      socket.send(JSON.stringify({ type: 'session_state', session: currentSession }));
+    }
+
     socket.on('message', (data) => {
       let parsed: unknown;
       try {

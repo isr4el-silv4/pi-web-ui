@@ -90,6 +90,18 @@ function render() {
   // Scroll to bottom of messages
   els.messages.scrollTop = els.messages.scrollHeight;
 
+  // Update cwd display from session state (synced from bridge) or local input
+  const sessionCwd = state.session?.cwd;
+  if (sessionCwd) {
+    selectedCwd = sessionCwd;
+    els.cwdDisplay.textContent = sessionCwd;
+    els.cwdInput.value = sessionCwd;
+    els.cwdWarning.hidden = true;
+    els.cwdInput.hidden = true;
+  } else if (!els.cwdInput.hidden) {
+    els.cwdDisplay.textContent = els.cwdInput.value || 'not set';
+  }
+  
   // Render attached tabs list
   console.log(`[SidePanel] render: attachedTabs=${JSON.stringify(state.attachedTabs.map(t => ({ id: t.id, title: t.title })))}`);
   els.attachedTabsList.style.display = state.attachedTabs.length === 0 ? 'none' : 'flex';
