@@ -69,6 +69,9 @@ export interface BrowserToolExecutorLike {
 
 interface PiSdkModuleLike {
   DefaultResourceLoader: new (options: { cwd: string; agentDir?: string }) => unknown;
+  SessionManager?: {
+    open(path: string, sessionDir?: string, cwdOverride?: string): unknown;
+  };
   createAgentSession: (options: Record<string, unknown>) => Promise<unknown> | unknown;
   defineTool: (definition: Record<string, unknown>) => unknown;
   discoverAndLoadExtensions?: (...args: unknown[]) => Promise<unknown> | unknown;
@@ -171,9 +174,20 @@ export function createPiSdkAdapter({ sdk, browserToolExecutor }: { sdk: PiSdkMod
         sdk.initTheme();
       }
       const tools = createBrowserToolDefinitions(sdk, browserToolExecutor);
+      
+      // When resuming a session, create a SessionManager that loads the existing session file.
+      // The SDK's createAgentSession ignores `sessionPath` — it only accepts a pre-built `sessionManager`.
+      let sessionManager: unknown = undefined;
+      if (options.sessionPath && sdk.SessionManager) {
+        console.log('[Bridge] Opening existing session from:', options.sessionPath);
+        sessionManager = sdk.SessionManager.open(options.sessionPath);
+        const context = (sessionManager as any).buildSessionContext();
+        console.log('[Bridge] Loaded session context with', context.messages?.length ?? 0, 'messages');
+      }
+      
       const result = await sdk.createAgentSession({
         cwd: resolvedCwd,
-        sessionPath: options.sessionPath,
+        sessionManager,
         resourceLoader,
         customTools: tools,
       });

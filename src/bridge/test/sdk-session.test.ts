@@ -139,6 +139,66 @@ describe('sdk session host', () => {
     expect(session).toMatchObject({ id: 'direct-session' });
     expect((session as any).prompt).toBeDefined();
   });
+
+  it('opens existing session via SessionManager when sessionPath is provided', async () => {
+    const createdTools: unknown[] = [];
+    const mockSessionManager = {
+      buildSessionContext: vi.fn(() => ({ messages: [{ role: 'user', text: 'Hello' }, { role: 'assistant', text: 'Hi' }] })),
+    };
+    const createAgentSessionOptions: Record<string, unknown>[] = [];
+    const sdk = {
+      DefaultResourceLoader: vi.fn(function ResourceLoader(this: { cwd: string }, options: { cwd: string }) { this.cwd = options.cwd; }),
+      SessionManager: {
+        open: vi.fn(() => mockSessionManager),
+      },
+      createAgentSession: vi.fn(async (options) => {
+        createAgentSessionOptions.push(options);
+        return { id: 'resumed-session', options };
+      }),
+      defineTool: vi.fn((tool) => { createdTools.push(tool); return tool; }),
+      discoverAndLoadExtensions: vi.fn(async () => []),
+      loadSkills: vi.fn(async () => []),
+    };
+    const adapter = createPiSdkAdapter({ sdk, browserToolExecutor: { execute: vi.fn() } });
+
+    await adapter.createSession({ cwd: '/project', sessionPath: '/sessions/resume.jsonl' });
+
+    // SessionManager.open should have been called with the session path
+    expect(sdk.SessionManager.open).toHaveBeenCalledWith('/sessions/resume.jsonl');
+    // buildSessionContext should have been called to log message count
+    expect(mockSessionManager.buildSessionContext).toHaveBeenCalled();
+    // createAgentSession should receive the sessionManager (not sessionPath)
+    expect(createAgentSessionOptions).toHaveLength(1);
+    expect(createAgentSessionOptions[0].sessionManager).toBe(mockSessionManager);
+    expect(createAgentSessionOptions[0].sessionPath).toBeUndefined();
+  });
+
+  it('does not call SessionManager.open when sessionPath is not provided', async () => {
+    const createdTools: unknown[] = [];
+    const createAgentSessionOptions: Record<string, unknown>[] = [];
+    const sdk = {
+      DefaultResourceLoader: vi.fn(function ResourceLoader(this: { cwd: string }, options: { cwd: string }) { this.cwd = options.cwd; }),
+      SessionManager: {
+        open: vi.fn(),
+      },
+      createAgentSession: vi.fn(async (options) => {
+        createAgentSessionOptions.push(options);
+        return { id: 'new-session', options };
+      }),
+      defineTool: vi.fn((tool) => { createdTools.push(tool); return tool; }),
+      discoverAndLoadExtensions: vi.fn(async () => []),
+      loadSkills: vi.fn(async () => []),
+    };
+    const adapter = createPiSdkAdapter({ sdk, browserToolExecutor: { execute: vi.fn() } });
+
+    await adapter.createSession({ cwd: '/project' });
+
+    // SessionManager.open should NOT have been called
+    expect(sdk.SessionManager.open).not.toHaveBeenCalled();
+    // createAgentSession should NOT receive a sessionManager
+    expect(createAgentSessionOptions).toHaveLength(1);
+    expect(createAgentSessionOptions[0].sessionManager).toBeUndefined();
+  });
 });
 
 describe('resolveCwd', () => {

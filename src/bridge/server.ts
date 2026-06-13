@@ -132,32 +132,11 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
               clients.broadcast({ type: 'session_error', error: `Failed to load session history: ${errorMessage}` });
             });
 
-          // 2. Try to resolve cwd from session file asynchronously
-          // Start with context cwd, update when session cwd is available
-          let resumeCwd = options.context.cwd;
-          (async () => {
-            try {
-              const { SessionManager } = await import('@earendil-works/pi-coding-agent');
-              const manager = SessionManager.open(command.sessionPath);
-              const sessionCwd = manager.getCwd();
-              if (sessionCwd) {
-                resumeCwd = sessionCwd;
-                sessions.resumeSession(command.sessionPath, { cwd: sessionCwd });
-                const updatedSession = sessions.getCurrentSession();
-                if (updatedSession) {
-                  clients.broadcast({ type: 'session_state', session: updatedSession as unknown as JsonValue });
-                }
-              }
-            } catch {
-              // Use context cwd as fallback
-            }
-          })();
+          // 2. Create session in registry using context cwd
+          const session = sessions.resumeSession(command.sessionPath, { cwd: options.context.cwd });
 
-          // 3. Create/update session in registry (will be updated when cwd resolves)
-          const session = sessions.resumeSession(command.sessionPath, { cwd: resumeCwd });
-
-          // 4. Create SDK session
-          ready = sdkHost.create({ cwd: resumeCwd, sessionPath: command.sessionPath }).then((created) => { 
+          // 3. Create SDK session with the sessionPath so it loads existing history
+          ready = sdkHost.create({ cwd: options.context.cwd, sessionPath: command.sessionPath }).then((created) => { 
             sdkSession = created;
             setupSdkSubscription(created);
           }).catch((error: unknown) => {
