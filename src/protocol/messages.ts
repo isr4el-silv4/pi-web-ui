@@ -32,7 +32,7 @@ export type ServerEvent =
   | { type: 'extension_ui_notify'; message: string }
   | { type: 'bridge_error'; error: string }
   | { type: 'sessions_list'; sessions: Array<{ path: string; name?: string; timestamp: string; firstMessage?: string }> }
-  | { type: 'session_history'; messages: Array<SessionHistoryMessage> };
+  | { type: 'session_history'; messages: Array<SessionHistoryMessage>; cwd?: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

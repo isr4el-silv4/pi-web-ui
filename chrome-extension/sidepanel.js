@@ -274,6 +274,12 @@ function renderSessionSelect() {
     opt.textContent = displayName;
     select.appendChild(opt);
   }
+
+  // Select the currently active session if it's in the list
+  const currentSessionPath = state.session?.sessionPath;
+  if (currentSessionPath && sessions.some((s) => s.path === currentSessionPath)) {
+    select.value = currentSessionPath;
+  }
 }
 
 function renderErrorPill() {

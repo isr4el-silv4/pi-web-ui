@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import * as fs from 'node:fs';
 import { isClientCommand, type ClientCommand, type JsonObject, type JsonValue, type SessionHistoryMessage } from '../protocol/index.js';
 import { createBrowserClientRegistry, type BrowserClientRegistry } from './browser-client.js';
 import { createBrowserToolExecutor } from './browser-tools.js';
@@ -111,6 +112,8 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
         case 'new_session': {
           const resolvedCwd = resolveCwd(command.cwd);
           const session = sessions.createSession({ cwd: resolvedCwd });
+          // Clear chat history for the new session
+          clients.broadcast({ type: 'session_history', messages: [], cwd: resolvedCwd });
           ready = sdkHost.create({ cwd: resolvedCwd }).then((created) => { 
             sdkSession = created;
             setupSdkSubscription(created);
@@ -122,21 +125,29 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           return session;
         }
         case 'resume_session': {
-          // 1. Build and broadcast session history
+          // 1. Build and broadcast session history (async, fires in background)
           buildSessionHistory(command.sessionPath)
-            .then((history) => {
-              clients.broadcast({ type: 'session_history', messages: history });
+            .then(({ messages, cwd: sessionCwd }) => {
+              const event: { type: string; messages: SessionHistoryMessage[]; cwd?: string } = 
+                { type: 'session_history', messages };
+              if (sessionCwd) event.cwd = sessionCwd;
+              clients.broadcast(event as JsonObject);
             })
             .catch((error: unknown) => {
               const errorMessage = error instanceof Error ? error.message : String(error);
               clients.broadcast({ type: 'session_error', error: `Failed to load session history: ${errorMessage}` });
             });
 
-          // 2. Create session in registry using context cwd
-          const session = sessions.resumeSession(command.sessionPath, { cwd: options.context.cwd });
+          // 2. Extract cwd from session file header (synchronous)
+          const sessionCwd = extractSessionCwdSync(command.sessionPath);
+          const resolvedCwd = sessionCwd ?? options.context.cwd;
+          console.log(`[Bridge] Resuming session from ${command.sessionPath}, cwd=${resolvedCwd}`);
 
-          // 3. Create SDK session with the sessionPath so it loads existing history
-          ready = sdkHost.create({ cwd: options.context.cwd, sessionPath: command.sessionPath }).then((created) => { 
+          // 3. Create session in registry with the session's own cwd
+          const session = sessions.resumeSession(command.sessionPath, { cwd: resolvedCwd });
+
+          // 4. Create SDK session with the session's own cwd so it operates in the correct directory
+          ready = sdkHost.create({ cwd: resolvedCwd, sessionPath: command.sessionPath }).then((created) => { 
             sdkSession = created;
             setupSdkSubscription(created);
           }).catch((error: unknown) => {
@@ -156,7 +167,8 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
               const errorMessage = error instanceof Error ? error.message : String(error);
               clients.broadcast({ type: 'session_error', error: `Failed to list sessions: ${errorMessage}` });
             });
-          return { cwd: resolvedCwd };
+          // Return the full current session so session_state doesn't overwrite sessionPath
+          return sessions.getCurrentSession();
         }
         case 'set_permission_mode':
           return sessions.setPermissionMode(command.mode);
@@ -263,10 +275,36 @@ async function listSessionsForCwd(cwd: string): Promise<Array<{ path: string; na
 }
 
 /**
- * Builds session history from a JSONL session file.
- * Returns an array of SessionHistoryMessage objects for UI display.
+ * Extract the cwd from a session file header (synchronous).
+ * Session files are JSONL - the first line is the session header with cwd.
+ * Returns undefined if the file doesn't exist or has no valid header.
  */
-async function buildSessionHistory(sessionPath: string): Promise<SessionHistoryMessage[]> {
+function extractSessionCwdSync(sessionPath: string): string | undefined {
+  try {
+    if (!fs.existsSync(sessionPath)) return undefined;
+    const fd = fs.openSync(sessionPath, 'r');
+    try {
+      const buffer = Buffer.alloc(4096);
+      const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, 0);
+      const firstLine = buffer.toString('utf8', 0, bytesRead).split('\n')[0].trim();
+      if (!firstLine) return undefined;
+      const header = JSON.parse(firstLine) as { type?: string; cwd?: string };
+      if (header.type !== 'session') return undefined;
+      return typeof header.cwd === 'string' && header.cwd ? header.cwd : undefined;
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Builds session history from a JSONL session file.
+ * Returns an array of SessionHistoryMessage objects for UI display,
+ * along with the cwd from the session header.
+ */
+async function buildSessionHistory(sessionPath: string): Promise<{ messages: SessionHistoryMessage[]; cwd?: string }> {
   const { SessionManager } = await import('@earendil-works/pi-coding-agent');
   
   const manager = SessionManager.open(sessionPath);
@@ -288,7 +326,10 @@ async function buildSessionHistory(sessionPath: string): Promise<SessionHistoryM
     }
   }
   
-  return messages;
+  // Extract cwd from session header via SessionManager
+  const cwd = (manager as any).getCwd?.() as string | undefined;
+  
+  return { messages, cwd };
 }
 
 function extractAgentText(content: unknown): string {

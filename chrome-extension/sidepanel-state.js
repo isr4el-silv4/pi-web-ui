@@ -83,7 +83,13 @@ export function reduceSidePanelState(state, event) {
       return { ...state, sessionError: event.error, loadingSessions: false };
     case 'session_history':
       // Clear existing messages and replace with history
-      return { ...state, messages: event.messages, sending: false };
+      // Also update cwd from the session file if provided
+      return { 
+        ...state, 
+        messages: event.messages, 
+        sending: false,
+        ...(event.cwd ? { session: { ...state.session, cwd: event.cwd } } : {}),
+      };
     default:
       return state;
   }
