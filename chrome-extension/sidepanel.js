@@ -26,9 +26,43 @@ const els = {
   mode: document.querySelector('#mode'),
   devtoolsWarning: document.querySelector('#devtools-warning'),
   attachedTabsList: document.querySelector('#attached-tabs-list'),
+  sessionSelect: document.querySelector('#session-select'),
+  sessionError: document.querySelector('#session-error'),
 };
 
 let selectedCwd = null;
+let lastFetchedCwd = null;
+
+function fetchSessionsForCwd(cwd) {
+  if (!cwd) return;
+  // Only fetch sessions with absolute paths — relative paths can't be matched
+  // against session records. Let the bridge resolve relative paths via new_session,
+  // then session_state will fire back with the absolute cwd and trigger this again.
+  const isAbsolute = cwd.startsWith('/') || /^[a-zA-Z]:/.test(cwd);
+  if (!isAbsolute) return;
+  if (cwd === lastFetchedCwd) return; // Already fetched
+  if (!state.bridgeOnline) return;
+  lastFetchedCwd = cwd;
+  dispatch({ type: 'loading_sessions' });
+  client.sendCommand({ type: 'list_sessions', cwd });
+}
+
+function formatDate(timestamp) {
+  const date = new Date(timestamp);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[date.getMonth()];
+  const day = date.getDate();
+  const hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12;
+  return `${month} ${day}, ${displayHours}:${minutes} ${ampm}`;
+}
+
+function truncate(text, maxLength) {
+  if (!text) return '';
+  return text.length > maxLength ? text.substring(0, maxLength) + '…' : text;
+}
 
 function render() {
   els.status.textContent = state.bridgeOnline ? `Bridge online · ${state.permissionMode}` : 'Bridge offline';
@@ -79,15 +113,97 @@ function render() {
   for (const message of state.messages) {
     const item = document.createElement('div');
     item.className = `message ${message.role}`;
-    if (message.role === 'assistant') {
-      item.innerHTML = renderMarkdown(message.text);
-    } else {
-      item.textContent = message.text;
+
+    switch (message.role) {
+      case 'user':
+        item.innerHTML = renderMarkdown(message.text);
+        if (message.image) {
+          const img = document.createElement('img');
+          img.className = 'user-image';
+          img.src = `data:${message.image.mimeType};base64,${message.image.data}`;
+          item.appendChild(img);
+        }
+        break;
+
+      case 'assistant':
+        if (message.thinking) {
+          const thinkingToggle = document.createElement('button');
+          thinkingToggle.className = 'thinking-toggle';
+          thinkingToggle.textContent = '🤔 Thinking...';
+          const thinkingBlock = document.createElement('div');
+          thinkingBlock.className = 'thinking-block';
+          thinkingBlock.textContent = message.thinking;
+          thinkingToggle.addEventListener('click', () => {
+            thinkingBlock.classList.toggle('expanded');
+          });
+          item.appendChild(thinkingToggle);
+          item.appendChild(thinkingBlock);
+        }
+        item.innerHTML += renderMarkdown(message.text);
+        break;
+
+      case 'tool': {
+        const toolHeader = document.createElement('div');
+        toolHeader.className = 'tool-name';
+        toolHeader.textContent = `🔧 ${message.toolName}${message.isError ? ' (error)' : ''}`;
+        item.appendChild(toolHeader);
+
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'toggle-result';
+        toggleBtn.textContent = '▼ Show result';
+        const resultDiv = document.createElement('div');
+        resultDiv.className = 'tool-result';
+        resultDiv.textContent = message.toolResult;
+        toggleBtn.addEventListener('click', () => {
+          item.classList.toggle('expanded');
+          toggleBtn.textContent = item.classList.contains('expanded') ? '▲ Hide result' : '▼ Show result';
+        });
+        item.appendChild(toggleBtn);
+        item.appendChild(resultDiv);
+        break;
+      }
+
+      case 'bash': {
+        const cmd = document.createElement('div');
+        cmd.className = 'bash-command';
+        cmd.textContent = `$ ${message.command}`;
+        item.appendChild(cmd);
+
+        const output = document.createElement('div');
+        output.className = 'bash-output';
+        output.textContent = message.output;
+        item.appendChild(output);
+
+        if (message.isError) item.classList.add('error');
+        break;
+      }
+
+      case 'compaction': {
+        const compHeader = document.createElement('div');
+        compHeader.textContent = `📦 Context compacted (${message.tokensBefore} tokens summarized)`;
+        item.appendChild(compHeader);
+
+        const summary = document.createElement('div');
+        summary.className = 'compaction-summary';
+        summary.textContent = message.summary;
+        item.appendChild(summary);
+        break;
+      }
+
+      default:
+        item.textContent = message.text || '';
     }
+
     els.messages.append(item);
   }
   // Scroll to bottom of messages
   els.messages.scrollTop = els.messages.scrollHeight;
+
+  // Render session selector dropdown
+  renderSessionSelect();
+
+  // Render error pill
+  renderErrorPill();
 
   // Update cwd display from session state (synced from bridge) or local input
   const sessionCwd = state.session?.cwd;
@@ -125,6 +241,47 @@ function render() {
     chip.append(remove);
 
     els.attachedTabsList.append(chip);
+  }
+}
+
+function renderSessionSelect() {
+  const select = els.sessionSelect;
+  const sessions = state.sessionsList;
+
+  select.innerHTML = '';
+
+  // "+ New Session" option
+  const newOpt = document.createElement('option');
+  newOpt.value = '__new__';
+  newOpt.textContent = '+ New Session';
+  select.appendChild(newOpt);
+
+  if (sessions.length === 0) {
+    const noneOpt = document.createElement('option');
+    noneOpt.value = '';
+    noneOpt.textContent = '— No sessions for this directory —';
+    select.appendChild(noneOpt);
+    select.disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+
+  for (const session of sessions) {
+    const opt = document.createElement('option');
+    opt.value = session.path;
+    const displayName = session.name || truncate(session.firstMessage, 60) || formatDate(session.timestamp);
+    opt.textContent = displayName;
+    select.appendChild(opt);
+  }
+}
+
+function renderErrorPill() {
+  if (state.sessionError) {
+    els.sessionError.textContent = `⚠ ${state.sessionError}`;
+    els.sessionError.hidden = false;
+  } else {
+    els.sessionError.hidden = true;
   }
 }
 
@@ -183,6 +340,10 @@ client = createBridgeClient({
         }).catch(() => {});
       }
     }
+    if (event.type === 'session_state' && event.session?.cwd) {
+      // Auto-fetch sessions when cwd changes
+      fetchSessionsForCwd(event.session.cwd);
+    }
     dispatch(event);
   },
   executeTool: (tool, params) => toolExecutor.execute(tool, params),
@@ -210,21 +371,26 @@ els.cwdPicker.addEventListener('click', async () => {
   try {
     const dirHandle = await window.showDirectoryPicker();
     const path = await resolveCwdPath(dirHandle);
+    const isAbsolute = path.startsWith('/') || /^[a-zA-Z]:/.test(path);
+    
     selectedCwd = path;
     els.cwdDisplay.textContent = path;
+    els.cwdInput.value = path;
+    
     // Show warning if path is not absolute (only directory name was resolved)
-    const isAbsolute = path.startsWith('/') || /^[a-zA-Z]:/.test(path);
     els.cwdWarning.hidden = isAbsolute;
     els.cwdInput.hidden = isAbsolute;
-    if (!isAbsolute) {
-      els.cwdInput.value = path;
-    }
 
-    // Auto-create new session with the picked directory
+    // Fetch sessions only if we have an absolute path
+    // If not absolute, the bridge will resolve it via new_session and
+    // session_state will fire back with the correct absolute cwd
+    fetchSessionsForCwd(isAbsolute ? path : null);
+
     if (!state.bridgeOnline) {
       dispatch({ type: 'bridge_error', error: 'Bridge is offline — cannot create session' });
       return;
     }
+    // Always send the path as-is — the bridge's resolveCwd handles relative paths
     client.sendCommand({ type: 'new_session', cwd: path });
   } catch {
     // User cancelled or API not available
@@ -240,5 +406,21 @@ els.cwdInput.addEventListener('input', () => {
 els.cookies.addEventListener('change', () => client.sendCommand({ type: 'set_cookie_access', enabled: els.cookies.checked }));
 els.storage.addEventListener('change', () => client.sendCommand({ type: 'set_storage_access', enabled: els.storage.checked }));
 els.mode.addEventListener('change', () => client.sendCommand({ type: 'set_permission_mode', mode: els.mode.value }));
+
+// Session selector change handler
+els.sessionSelect.addEventListener('change', () => {
+  const value = els.sessionSelect.value;
+  if (value === '__new__') {
+    // Create new session with current cwd
+    const cwd = state.session?.cwd || selectedCwd || els.cwdInput.value;
+    if (cwd) {
+      lastFetchedCwd = null; // Reset so sessions re-fetch after new session
+      client.sendCommand({ type: 'new_session', cwd });
+    }
+  } else if (value) {
+    // Resume session
+    client.sendCommand({ type: 'resume_session', sessionPath: value });
+  }
+});
 
 render();

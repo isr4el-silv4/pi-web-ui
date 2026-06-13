@@ -109,9 +109,150 @@ main { padding: 12px; overflow-wrap: break-word; }
 #prompt { flex: 1; min-width: 0; }
 #cwd-display { font-family: monospace; font-size: 12px; color: #555; overflow-wrap: break-word; word-break: break-all; }
 #cwd-picker { font-size: 12px; padding: 2px 8px; cursor: pointer; flex-shrink: 0; }
+.cwd-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.resume-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+#session-select {
+  font-family: monospace;
+  font-size: 12px;
+  padding: 2px 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  max-width: 300px;
+}
+
+#session-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error-pill {
+  background: #fce8e6;
+  color: #c5221f;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  display: inline-block;
+  margin: 4px 0;
+}
 .cwd-warning { background: #fff4ce; padding: 8px; border-radius: 6px; font-size: 12px; color: #8a6d3b; overflow-wrap: break-word; }
 #cwd-input { font-family: monospace; font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; width: 100%; box-sizing: border-box; }
 .send-error { padding: 8px 12px; background: #fce8e6; color: #c5221f; border-radius: 6px; margin-bottom: 8px; font-size: 12px; overflow-wrap: break-word; }
 #prompt-form button:disabled, #prompt:disabled { opacity: 0.5; cursor: not-allowed; }
 #notifications { overflow-wrap: break-word; word-break: break-word; }
 #ui-requests .message { overflow-wrap: break-word; word-break: break-word; }
+
+/* Rich message types */
+.message.tool {
+  background: #f0f0f0;
+  border-left: 3px solid #666;
+}
+
+.message.tool .tool-name {
+  font-weight: 600;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.message.tool .tool-result {
+  display: none;
+  margin-top: 4px;
+  padding: 6px;
+  background: #e8e8e8;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.message.tool.expanded .tool-result {
+  display: block;
+}
+
+.message.tool .toggle-result {
+  background: none;
+  border: none;
+  color: #0969da;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+}
+
+.message.bash {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border-left: 3px solid #4caf50;
+}
+
+.message.bash.error {
+  border-left-color: #c5221f;
+}
+
+.message.bash .bash-command {
+  font-family: monospace;
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.message.bash .bash-output {
+  font-family: monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.message.compaction {
+  background: #fff4ce;
+  border-left: 3px solid #d4a017;
+  font-style: italic;
+}
+
+.message.compaction .compaction-summary {
+  margin-top: 4px;
+}
+
+.message.assistant .thinking-block {
+  background: #f6f8fa;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px;
+  margin: 8px 0;
+  font-size: 12px;
+  color: #666;
+  display: none;
+}
+
+.message.assistant .thinking-block.expanded {
+  display: block;
+}
+
+.message.assistant .thinking-toggle {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.message.user .user-image {
+  max-width: 200px;
+  border-radius: 4px;
+  margin-top: 4px;
+}

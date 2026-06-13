@@ -12,6 +12,9 @@ export function createInitialState() {
     sendError: null,
     devtoolsConflict: false,
     attachedTabs: [],
+    sessionsList: [],
+    loadingSessions: false,
+    sessionError: null,
   };
 }
 
@@ -70,6 +73,17 @@ export function reduceSidePanelState(state, event) {
         ...state,
         attachedTabs: state.attachedTabs.filter((t) => t.id !== event.tabId),
       };
+    case 'loading_sessions':
+      return { ...state, loadingSessions: true, sessionError: null };
+    case 'sessions_loaded':
+      return { ...state, sessionsList: event.sessions, loadingSessions: false };
+    case 'sessions_list':
+      return { ...state, sessionsList: event.sessions, loadingSessions: false };
+    case 'session_error':
+      return { ...state, sessionError: event.error, loadingSessions: false };
+    case 'session_history':
+      // Clear existing messages and replace with history
+      return { ...state, messages: event.messages, sending: false };
     default:
       return state;
   }

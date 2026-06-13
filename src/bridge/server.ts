@@ -1,11 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { isClientCommand, type ClientCommand, type JsonObject, type JsonValue } from '../protocol/index.js';
+import { isClientCommand, type ClientCommand, type JsonObject, type JsonValue, type SessionHistoryMessage } from '../protocol/index.js';
 import { createBrowserClientRegistry, type BrowserClientRegistry } from './browser-client.js';
 import { createBrowserToolExecutor } from './browser-tools.js';
 import { createSessionRegistry } from './session-registry.js';
 import { parseStartContext, type BridgeStartContext } from './start-context.js';
 import { attachWebSocketServer } from './websocket-server.js';
-import { createDefaultPiSdkAdapter, createSdkSessionHost, type SdkAdapter } from './sdk-session.js';
+import { createDefaultPiSdkAdapter, createSdkSessionHost, resolveCwd, type SdkAdapter } from './sdk-session.js';
 import { createExtensionUiAdapter, type UiResponse } from './extension-ui-adapter.js';
 
 export function createBridgeApp(options: { context: BridgeStartContext; pid?: number; sdkHost?: { create(options: { cwd: string; sessionPath?: string }): Promise<unknown> }; ui?: { respond(response: UiResponse): boolean } }) {
@@ -109,8 +109,9 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     handleClientCommand(command: ClientCommand) {
       switch (command.type) {
         case 'new_session': {
-          const session = sessions.createSession({ cwd: command.cwd });
-          ready = sdkHost.create({ cwd: command.cwd }).then((created) => { 
+          const resolvedCwd = resolveCwd(command.cwd);
+          const session = sessions.createSession({ cwd: resolvedCwd });
+          ready = sdkHost.create({ cwd: resolvedCwd }).then((created) => { 
             sdkSession = created;
             setupSdkSubscription(created);
           }).catch((error: unknown) => {
@@ -121,8 +122,42 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           return session;
         }
         case 'resume_session': {
-          const session = sessions.resumeSession(command.sessionPath, { cwd: options.context.cwd });
-          ready = sdkHost.create({ cwd: options.context.cwd, sessionPath: command.sessionPath }).then((created) => { 
+          // 1. Build and broadcast session history
+          buildSessionHistory(command.sessionPath)
+            .then((history) => {
+              clients.broadcast({ type: 'session_history', messages: history });
+            })
+            .catch((error: unknown) => {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              clients.broadcast({ type: 'session_error', error: `Failed to load session history: ${errorMessage}` });
+            });
+
+          // 2. Try to resolve cwd from session file asynchronously
+          // Start with context cwd, update when session cwd is available
+          let resumeCwd = options.context.cwd;
+          (async () => {
+            try {
+              const { SessionManager } = await import('@earendil-works/pi-coding-agent');
+              const manager = SessionManager.open(command.sessionPath);
+              const sessionCwd = manager.getCwd();
+              if (sessionCwd) {
+                resumeCwd = sessionCwd;
+                sessions.resumeSession(command.sessionPath, { cwd: sessionCwd });
+                const updatedSession = sessions.getCurrentSession();
+                if (updatedSession) {
+                  clients.broadcast({ type: 'session_state', session: updatedSession as unknown as JsonValue });
+                }
+              }
+            } catch {
+              // Use context cwd as fallback
+            }
+          })();
+
+          // 3. Create/update session in registry (will be updated when cwd resolves)
+          const session = sessions.resumeSession(command.sessionPath, { cwd: resumeCwd });
+
+          // 4. Create SDK session
+          ready = sdkHost.create({ cwd: resumeCwd, sessionPath: command.sessionPath }).then((created) => { 
             sdkSession = created;
             setupSdkSubscription(created);
           }).catch((error: unknown) => {
@@ -131,6 +166,18 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
             clients.broadcast({ type: 'bridge_error', error: `SDK initialization failed: ${errorMessage}` });
           });
           return session;
+        }
+        case 'list_sessions': {
+          const resolvedCwd = resolveCwd(command.cwd);
+          listSessionsForCwd(resolvedCwd)
+            .then((sessionList) => {
+              clients.broadcast({ type: 'sessions_list', sessions: sessionList });
+            })
+            .catch((error: unknown) => {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              clients.broadcast({ type: 'session_error', error: `Failed to list sessions: ${errorMessage}` });
+            });
+          return { cwd: resolvedCwd };
         }
         case 'set_permission_mode':
           return sessions.setPermissionMode(command.mode);
@@ -196,6 +243,137 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     },
   };
   return app;
+}
+
+// ===== Session Resume Helpers =====
+
+/**
+ * Lists session files for a given working directory.
+ * Returns session metadata sorted by timestamp (most recent first).
+ * Uses listAll() + client-side filtering since SessionManager.list(cwd)
+ * requires exact cwd match (path hash) which is fragile.
+ */
+async function listSessionsForCwd(cwd: string): Promise<Array<{ path: string; name?: string; timestamp: string; firstMessage?: string }>> {
+  const { SessionManager } = await import('@earendil-works/pi-coding-agent');
+  const allSessions = await SessionManager.listAll();
+  
+  // Normalize the target cwd for comparison
+  const normalizedCwd = cwd.replace(/\/+$/, ''); // strip trailing slashes
+  console.log(`[Bridge] listSessionsForCwd: cwd="${normalizedCwd}", total sessions found: ${allSessions.length}`);
+  
+  const results: Array<{ path: string; name?: string; timestamp: string; firstMessage?: string }> = [];
+  
+  for (const info of allSessions) {
+    const sessionCwd = info.cwd.replace(/\/+$/, '');
+    // Match by cwd — both absolute paths should match
+    if (sessionCwd === normalizedCwd) {
+      results.push({ 
+        path: info.path, 
+        name: info.name || undefined, 
+        timestamp: info.modified.toISOString(),
+        firstMessage: info.firstMessage || undefined,
+      });
+    }
+  }
+  
+  console.log(`[Bridge] listSessionsForCwd: matched ${results.length} sessions for cwd="${normalizedCwd}"`);
+  
+  // Sort by timestamp descending (most recent first)
+  results.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  return results;
+}
+
+/**
+ * Builds session history from a JSONL session file.
+ * Returns an array of SessionHistoryMessage objects for UI display.
+ */
+async function buildSessionHistory(sessionPath: string): Promise<SessionHistoryMessage[]> {
+  const { SessionManager } = await import('@earendil-works/pi-coding-agent');
+  
+  const manager = SessionManager.open(sessionPath);
+  const context = manager.buildSessionContext();
+  const messages: SessionHistoryMessage[] = [];
+
+  for (const entry of context.messages) {
+    try {
+      if (entry.role === 'user') {
+        messages.push(mapUserAgentMessage(entry));
+      } else if (entry.role === 'assistant') {
+        messages.push(mapAssistantAgentMessage(entry));
+      } else if (entry.role === 'toolResult') {
+        messages.push(mapToolResultAgentMessage(entry));
+      }
+      // Other roles (system, etc.) are skipped for UI display
+    } catch (error) {
+      console.warn(`[Bridge] Failed to map message entry:`, error);
+    }
+  }
+  
+  return messages;
+}
+
+function extractAgentText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((c: any) => c && typeof c === 'object' && c.type === 'text')
+      .map((c: any) => c.text || '')
+      .join('\n');
+  }
+  return JSON.stringify(content);
+}
+
+function mapUserAgentMessage(entry: any): SessionHistoryMessage {
+  const content = entry.content || '';
+  const text = typeof content === 'string' ? content : extractAgentText(content);
+  
+  // Check for image attachments
+  if (Array.isArray(content)) {
+    const imageBlock = content.find((c: any) => c?.type === 'image');
+    if (imageBlock) {
+      return {
+        role: 'user',
+        text,
+        image: {
+          data: imageBlock.data || imageBlock.url || '',
+          mimeType: imageBlock.mimeType || imageBlock.contentType || 'image/png',
+        },
+      };
+    }
+  }
+  
+  return { role: 'user', text };
+}
+
+function mapAssistantAgentMessage(entry: any): SessionHistoryMessage {
+  const content = entry.content || '';
+  const text = typeof content === 'string' ? content : extractAgentText(content);
+  
+  // Extract thinking block if present
+  let thinking: string | undefined;
+  if (Array.isArray(content)) {
+    const thinkingBlock = content.find((c: any) => c?.type === 'thinking');
+    if (thinkingBlock) {
+      thinking = thinkingBlock.thinking || thinkingBlock.text || '';
+    }
+  }
+  
+  return { role: 'assistant', text, thinking: thinking || undefined };
+}
+
+function mapToolResultAgentMessage(entry: any): SessionHistoryMessage {
+  const content = entry.content || '';
+  const text = typeof content === 'string' ? content : extractAgentText(content);
+  
+  // Try to extract tool name from content or entry metadata
+  const toolName = (entry as any).toolName || (entry as any).name || 'tool';
+  
+  return {
+    role: 'tool',
+    toolName,
+    toolResult: text,
+    isError: (entry as any).isError || false,
+  };
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown) {

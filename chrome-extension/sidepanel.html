@@ -20,7 +20,16 @@
         <div id="devtools-warning" class="devtools-warning" hidden>
           ⚠ Chrome DevTools is open on the active tab. Pi Web UI cannot capture network requests while DevTools is open. Close DevTools (F12) to resume.
         </div>
-        <label>cwd <span id="cwd-display">not set</span> <button id="cwd-picker">Browse…</button></label>
+        <div class="cwd-row">
+          <label>cwd <span id="cwd-display">not set</span> <button id="cwd-picker">Browse…</button></label>
+          <label class="resume-label">
+            Resume
+            <select id="session-select" disabled>
+              <option value="">— No sessions for this directory —</option>
+            </select>
+          </label>
+        </div>
+        <div id="session-error" class="error-pill" hidden></div>
         <div id="cwd-warning" class="cwd-warning" hidden>⚠ Only directory name detected. Pi may not find this directory. Enter the full path below:</div>
         <input id="cwd-input" type="text" placeholder="Full path to project directory" hidden />
         <label><input id="cookies" type="checkbox" /> cookies</label>

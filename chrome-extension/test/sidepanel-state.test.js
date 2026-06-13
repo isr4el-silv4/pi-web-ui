@@ -16,6 +16,9 @@ describe('side panel state', () => {
       sendError: null,
       devtoolsConflict: false,
       attachedTabs: [],
+      sessionsList: [],
+      loadingSessions: false,
+      sessionError: null,
     });
   });
 
@@ -202,5 +205,64 @@ describe('side panel state', () => {
     // session.cwd is gone but state.session is the new object
     expect(updated.session.id).toBe('s1');
     expect(updated.permissionMode).toBe('control');
+  });
+
+  it('sets loadingSessions=true on loading_sessions event', () => {
+    const state = reduceSidePanelState(createInitialState(), { type: 'loading_sessions' });
+    expect(state.loadingSessions).toBe(true);
+    expect(state.sessionError).toBeNull();
+  });
+
+  it('populates sessionsList on sessions_loaded event', () => {
+    const sessions = [
+      { path: '/project/.pi/sessions/2024-01-01.jsonl', name: 'My Session', timestamp: '2024-01-01T10:00:00Z', firstMessage: 'Hello' },
+      { path: '/project/.pi/sessions/2024-01-02.jsonl', timestamp: '2024-01-02T10:00:00Z' },
+    ];
+    const state = reduceSidePanelState(createInitialState(), { type: 'sessions_list', sessions });
+    expect(state.sessionsList).toEqual(sessions);
+    expect(state.loadingSessions).toBe(false);
+  });
+
+  it('sets sessionError on session_error event', () => {
+    const state = reduceSidePanelState(createInitialState(), { type: 'session_error', error: 'Failed to load session' });
+    expect(state.sessionError).toBe('Failed to load session');
+    expect(state.loadingSessions).toBe(false);
+  });
+
+  it('replaces messages on session_history event', () => {
+    // Start with existing messages
+    const withMessages = reduceSidePanelState(createInitialState(), { type: 'user_message', text: 'Old message' });
+    expect(withMessages.messages).toHaveLength(1);
+
+    // Load session history
+    const history = [
+      { role: 'user', text: 'First message' },
+      { role: 'assistant', text: 'First response' },
+      { role: 'user', text: 'Second message' },
+    ];
+    const state = reduceSidePanelState(withMessages, { type: 'session_history', messages: history });
+    expect(state.messages).toEqual(history);
+    expect(state.sending).toBe(false);
+  });
+
+  it('handles rich message types in session_history', () => {
+    const history = [
+      { role: 'tool', toolName: 'read_file', toolResult: 'file content', isError: false },
+      { role: 'bash', command: 'ls', output: 'file1.txt', exitCode: 0, isError: false },
+      { role: 'compaction', summary: 'Context compacted', tokensBefore: 40000 },
+      { role: 'assistant', text: 'Response', thinking: 'Let me think...' },
+      { role: 'user', text: 'Here is an image', image: { data: 'base64data', mimeType: 'image/png' } },
+    ];
+    const state = reduceSidePanelState(createInitialState(), { type: 'session_history', messages: history });
+    expect(state.messages).toEqual(history);
+    expect(state.messages).toHaveLength(5);
+  });
+
+  it('handles bash message with null exitCode', () => {
+    const history = [
+      { role: 'bash', command: 'ls', output: 'file1.txt', exitCode: null, isError: false },
+    ];
+    const state = reduceSidePanelState(createInitialState(), { type: 'session_history', messages: history });
+    expect(state.messages).toEqual(history);
   });
 });

@@ -59,4 +59,10 @@ describe('protocol messages', () => {
     expect(isClientCommand({ type: 'extension_ui_response', id: 'ui-1', value: true })).toBe(true);
     expect(isClientCommand({ type: 'set_cookie_access', enabled: 'false' })).toBe(false);
   });
+
+  it('identifies list_sessions command', () => {
+    expect(isClientCommand({ type: 'list_sessions', cwd: '/project' })).toBe(true);
+    expect(isClientCommand({ type: 'list_sessions' })).toBe(false); // missing cwd
+    expect(isClientCommand({ type: 'list_sessions', cwd: 123 })).toBe(false); // cwd not string
+  });
 });

@@ -222,4 +222,51 @@ describe('extension bridge client', () => {
 
     expect(sent).toEqual([JSON.stringify({ type: 'new_session', cwd: '/home/user/my-project' })]);
   });
+
+  it('sends list_sessions command with cwd', () => {
+    const { FakeWebSocket, sent } = createFakeWebSocket();
+    const client = createBridgeClient({ WebSocketCtor: FakeWebSocket, port: 43117 });
+    client.connect();
+
+    client.sendCommand({ type: 'list_sessions', cwd: '/home/user/my-project' });
+
+    expect(sent).toEqual([JSON.stringify({ type: 'list_sessions', cwd: '/home/user/my-project' })]);
+  });
+
+  it('receives sessions_list event', () => {
+    const { FakeWebSocket, listeners } = createFakeWebSocket();
+    const onEvent = vi.fn();
+
+    const client = createBridgeClient({ WebSocketCtor: FakeWebSocket, port: 43117, onEvent });
+    client.connect();
+    listeners.open();
+
+    const sessions = [
+      { path: '/project/.pi/sessions/2024-01-01.jsonl', name: 'My Session', timestamp: '2024-01-01T10:00:00Z', firstMessage: 'Hello' },
+      { path: '/project/.pi/sessions/2024-01-02.jsonl', timestamp: '2024-01-02T10:00:00Z' },
+    ];
+    listeners.message({ data: JSON.stringify({ type: 'sessions_list', sessions }) });
+
+    expect(onEvent).toHaveBeenCalledWith({ type: 'sessions_list', sessions });
+  });
+
+  it('receives session_history event with rich messages', () => {
+    const { FakeWebSocket, listeners } = createFakeWebSocket();
+    const onEvent = vi.fn();
+
+    const client = createBridgeClient({ WebSocketCtor: FakeWebSocket, port: 43117, onEvent });
+    client.connect();
+    listeners.open();
+
+    const messages = [
+      { role: 'user', text: 'Hello' },
+      { role: 'assistant', text: 'Hi there!', thinking: 'Let me greet the user' },
+      { role: 'tool', toolName: 'read_file', toolResult: 'content', isError: false },
+      { role: 'bash', command: 'ls', output: 'file.txt', exitCode: 0, isError: false },
+      { role: 'compaction', summary: 'Context summarized', tokensBefore: 40000 },
+    ];
+    listeners.message({ data: JSON.stringify({ type: 'session_history', messages }) });
+
+    expect(onEvent).toHaveBeenCalledWith({ type: 'session_history', messages });
+  });
 });
