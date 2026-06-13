@@ -61,7 +61,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
   // Create browser tool executor for SDK integration
   const transport = {
     requestBrowserTool: async (tool: string, params: JsonObject) => {
-      const session = sessions.getCurrentSession() ?? { id: 'default', cwd: options.context.cwd, permissionMode: options.context.permissionMode, cookieAccessEnabled: options.context.cookieAccessEnabled, storageAccessEnabled: options.context.storageAccessEnabled };
+      const session = sessions.getCurrentSession() ?? { id: 'default', cwd: options.context.cwd, cookieAccessEnabled: options.context.cookieAccessEnabled, storageAccessEnabled: options.context.storageAccessEnabled };
       const executor = createBrowserToolExecutor({ ...clients, confirm: uiAdapter.confirm, input: uiAdapter.input, notify: uiAdapter.notify }, session);
       return executor.execute(tool, params);
     },
@@ -170,8 +170,6 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           // Return the full current session so session_state doesn't overwrite sessionPath
           return sessions.getCurrentSession();
         }
-        case 'set_permission_mode':
-          return sessions.setPermissionMode(command.mode);
         case 'set_cookie_access':
           return sessions.setCookieAccess(command.enabled);
         case 'set_storage_access':

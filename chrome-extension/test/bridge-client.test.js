@@ -130,11 +130,11 @@ describe('extension bridge client', () => {
 
     // Simulate server responses: prompt_received + session_state
     listeners.message({ data: JSON.stringify({ type: 'prompt_received', message: 'Hello Pi' }) });
-    listeners.message({ data: JSON.stringify({ type: 'session_state', session: { id: 's1', permissionMode: 'debug' } }) });
+    listeners.message({ data: JSON.stringify({ type: 'session_state', session: { id: 's1' } }) });
 
     // Verify both responses were forwarded
     expect(onEvent).toHaveBeenCalledWith({ type: 'prompt_received', message: 'Hello Pi' });
-    expect(onEvent).toHaveBeenCalledWith({ type: 'session_state', session: { id: 's1', permissionMode: 'debug' } });
+    expect(onEvent).toHaveBeenCalledWith({ type: 'session_state', session: { id: 's1' } });
   });
 
   it('receives assistant_message from bridge', () => {

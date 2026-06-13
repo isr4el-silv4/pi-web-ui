@@ -22,7 +22,7 @@ afterEach(() => {
 
 describe('bridge websocket server', () => {
   it('accepts side panel commands over websocket and returns session state', async () => {
-    const app = createBridgeApp({ context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 } });
+    const app = createBridgeApp({ context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 } });
     const httpServer = createServer();
     attachWebSocketServer(httpServer, app);
     servers.push(httpServer);
@@ -37,13 +37,13 @@ describe('bridge websocket server', () => {
     const message = new Promise<Record<string, unknown>>((resolve) => {
       ws.once('message', (data) => resolve(JSON.parse(data.toString()) as Record<string, unknown>));
     });
-    ws.send(JSON.stringify({ type: 'set_permission_mode', mode: 'control' }));
+    ws.send(JSON.stringify({ type: 'set_cookie_access', enabled: true }));
 
-    await expect(message).resolves.toMatchObject({ type: 'session_state', session: { permissionMode: 'control' } });
+    await expect(message).resolves.toMatchObject({ type: 'session_state', session: { cookieAccessEnabled: true } });
   }, 10000);
 
   it('sends error response for invalid JSON', async () => {
-    const app = createBridgeApp({ context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 } });
+    const app = createBridgeApp({ context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 } });
     const httpServer = createServer();
     attachWebSocketServer(httpServer, app);
     servers.push(httpServer);
@@ -64,7 +64,7 @@ describe('bridge websocket server', () => {
   }, 10000);
 
   it('sends error response for invalid client command', async () => {
-    const app = createBridgeApp({ context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 } });
+    const app = createBridgeApp({ context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 } });
     const httpServer = createServer();
     attachWebSocketServer(httpServer, app);
     servers.push(httpServer);
@@ -92,7 +92,7 @@ describe('bridge websocket server', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
     const httpServer = createServer();
@@ -135,7 +135,7 @@ describe('bridge websocket server', () => {
       create: vi.fn().mockResolvedValue({ prompt: vi.fn().mockResolvedValue(undefined) }),
     };
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
     await app.ready;
@@ -176,7 +176,7 @@ describe('bridge websocket server', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
     

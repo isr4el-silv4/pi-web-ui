@@ -10,7 +10,6 @@ describe('session registry', () => {
     expect(session).toEqual({
       id: 'session-1',
       cwd: '/project',
-      permissionMode: 'debug',
       cookieAccessEnabled: false,
       storageAccessEnabled: false,
     });
@@ -26,16 +25,14 @@ describe('session registry', () => {
     expect(session.cwd).toBe('/project');
   });
 
-  it('updates permission and sensitive access toggles', () => {
+  it('updates sensitive access toggles', () => {
     const registry = createSessionRegistry(() => 'session-3');
     registry.createSession({ cwd: '/project' });
 
-    registry.setPermissionMode('control');
     registry.setCookieAccess(true);
     registry.setStorageAccess(true);
 
     expect(registry.getCurrentSession()).toMatchObject({
-      permissionMode: 'control',
       cookieAccessEnabled: true,
       storageAccessEnabled: true,
     });

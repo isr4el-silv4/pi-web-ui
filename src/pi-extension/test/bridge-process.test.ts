@@ -27,7 +27,6 @@ describe('bridge process manager', () => {
 
     const result = await manager.start({
       cwd: '/project',
-      permissionMode: 'debug',
       cookieAccessEnabled: false,
       storageAccessEnabled: false,
       port: 43117,
@@ -39,7 +38,6 @@ describe('bridge process manager', () => {
       env: expect.objectContaining({
         PI_WEB_UI_START_CONTEXT: JSON.stringify({
           cwd: '/project',
-          permissionMode: 'debug',
           cookieAccessEnabled: false,
           storageAccessEnabled: false,
           port: 43117,
@@ -58,7 +56,7 @@ describe('bridge process manager', () => {
       bridgeEntryPath: '/ext/dist/bridge/server.js',
     });
 
-    await expect(manager.start({ cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 })).resolves.toEqual({ pid: 12, port: 43117, alreadyRunning: true });
+    await expect(manager.start({ cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 })).resolves.toEqual({ pid: 12, port: 43117, alreadyRunning: true });
     expect(spawn).not.toHaveBeenCalled();
   });
 
@@ -79,7 +77,6 @@ describe('bridge process manager', () => {
 
     const result = await manager.start({
       cwd: '/project',
-      permissionMode: 'debug',
       cookieAccessEnabled: false,
       storageAccessEnabled: false,
       port: 43117,
@@ -101,7 +98,6 @@ describe('bridge process manager', () => {
 
     await expect(manager.start({
       cwd: '/project',
-      permissionMode: 'debug',
       cookieAccessEnabled: false,
       storageAccessEnabled: false,
       port: 43117,
@@ -132,7 +128,6 @@ describe('bridge process manager', () => {
 
     await expect(manager.start({
       cwd: '/project',
-      permissionMode: 'debug',
       cookieAccessEnabled: false,
       storageAccessEnabled: false,
       port: 43117,

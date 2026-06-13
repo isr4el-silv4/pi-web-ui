@@ -1,4 +1,4 @@
-import { DEFAULT_BRIDGE_PORT, type JsonObject, type JsonValue, type PermissionMode } from '../protocol/index.js';
+import { DEFAULT_BRIDGE_PORT, type JsonObject, type JsonValue } from '../protocol/index.js';
 import { createBridgeProcessManager, type BridgeProcessManager } from './bridge-process.js';
 import { createChromeOpener, type ChromeOpener } from './chrome.js';
 
@@ -28,18 +28,15 @@ export function parsePiWebUiCommand(args: string[]): { command: PiWebUiCommand }
 export function createPiWebUiController(deps: {
   bridge?: BridgeProcessManager;
   chrome?: ChromeOpener;
-  defaultPermissionMode?: PermissionMode;
 } = {}): PiWebUiController {
   const bridge = deps.bridge ?? createBridgeProcessManager();
   const chrome = deps.chrome ?? createChromeOpener();
-  const defaultPermissionMode = deps.defaultPermissionMode ?? 'debug';
 
   return {
     async start(context) {
       const result = await bridge.start({
         cwd: context.cwd,
         sessionPath: context.sessionPath,
-        permissionMode: defaultPermissionMode,
         cookieAccessEnabled: false,
         storageAccessEnabled: false,
         port: DEFAULT_BRIDGE_PORT,

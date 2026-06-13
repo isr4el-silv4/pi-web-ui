@@ -34,7 +34,6 @@ describe('pi-web-ui controller', () => {
     expect(bridge.start).toHaveBeenCalledWith({
       cwd: '/project',
       sessionPath: '/session.jsonl',
-      permissionMode: 'debug',
       cookieAccessEnabled: false,
       storageAccessEnabled: false,
       port: 43117,

@@ -20,7 +20,7 @@ describe('bridge SDK session integration', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
 
@@ -45,7 +45,7 @@ describe('bridge SDK session integration', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
 
@@ -74,7 +74,7 @@ describe('bridge SDK session integration', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
 
@@ -130,7 +130,7 @@ describe('bridge SDK session integration', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
 

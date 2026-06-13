@@ -43,7 +43,7 @@ describe('bridge prompt relay', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
     const httpServer = createServer();
@@ -85,7 +85,7 @@ describe('bridge prompt relay', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
     const httpServer = createServer();
@@ -142,7 +142,7 @@ describe('bridge prompt relay', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
     const httpServer = createServer();
@@ -196,7 +196,7 @@ describe('bridge prompt relay', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
     const httpServer = createServer();
@@ -243,7 +243,7 @@ describe('bridge prompt relay', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
 
@@ -292,7 +292,7 @@ describe('bridge prompt relay', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
       sdkHost,
     });
     const httpServer = createServer();

@@ -1,9 +1,8 @@
-import type { PermissionMode, SessionState } from '../protocol/index.js';
+import type { SessionState } from '../protocol/index.js';
 
 export interface CreateSessionOptions {
   cwd: string;
   sessionPath?: string;
-  permissionMode?: PermissionMode;
   cookieAccessEnabled?: boolean;
   storageAccessEnabled?: boolean;
 }
@@ -12,7 +11,6 @@ export interface SessionRegistry {
   createSession(options: CreateSessionOptions): SessionState;
   resumeSession(sessionPath: string, options: Omit<CreateSessionOptions, 'sessionPath'>): SessionState;
   getCurrentSession(): SessionState | undefined;
-  setPermissionMode(mode: PermissionMode): SessionState;
   setCookieAccess(enabled: boolean): SessionState;
   setStorageAccess(enabled: boolean): SessionState;
 }
@@ -31,7 +29,6 @@ export function createSessionRegistry(createId: () => string = () => crypto.rand
         id: createId(),
         cwd: options.cwd,
         ...(options.sessionPath ? { sessionPath: options.sessionPath } : {}),
-        permissionMode: options.permissionMode ?? 'debug',
         cookieAccessEnabled: options.cookieAccessEnabled ?? false,
         storageAccessEnabled: options.storageAccessEnabled ?? false,
       };
@@ -41,10 +38,6 @@ export function createSessionRegistry(createId: () => string = () => crypto.rand
       return this.createSession({ ...options, sessionPath });
     },
     getCurrentSession() {
-      return current;
-    },
-    setPermissionMode(mode) {
-      current = { ...requireCurrent(), permissionMode: mode };
       return current;
     },
     setCookieAccess(enabled) {

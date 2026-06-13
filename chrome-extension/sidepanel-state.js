@@ -1,7 +1,6 @@
 export function createInitialState() {
   return {
     bridgeOnline: false,
-    permissionMode: 'debug',
     cookieAccessEnabled: false,
     storageAccessEnabled: false,
     messages: [],
@@ -30,7 +29,6 @@ export function reduceSidePanelState(state, event) {
         ...state,
         bridgeOnline: true,
         session: event.session,
-        permissionMode: event.session?.permissionMode ?? state.permissionMode,
         cookieAccessEnabled: event.session?.cookieAccessEnabled ?? state.cookieAccessEnabled,
         storageAccessEnabled: event.session?.storageAccessEnabled ?? state.storageAccessEnabled,
       };

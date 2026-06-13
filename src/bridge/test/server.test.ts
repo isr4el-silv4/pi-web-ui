@@ -7,7 +7,7 @@ import * as path from 'node:path';
 describe('bridge app', () => {
   it('reports bridge status with active session and client count', () => {
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
       pid: 999,
     });
 
@@ -16,17 +16,16 @@ describe('bridge app', () => {
       pid: 999,
       port: 43117,
       browserClients: 0,
-      session: expect.objectContaining({ cwd: '/project', permissionMode: 'debug' }),
+      session: expect.objectContaining({ cwd: '/project' }),
     });
   });
 
   it('handles side panel commands by updating session state', () => {
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
       pid: 999,
     });
 
-    expect(app.handleClientCommand({ type: 'set_permission_mode', mode: 'control' })).toMatchObject({ permissionMode: 'control' });
     expect(app.handleClientCommand({ type: 'set_cookie_access', enabled: true })).toMatchObject({ cookieAccessEnabled: true });
     expect(app.handleClientCommand({ type: 'new_session', cwd: '/other' })).toMatchObject({ cwd: '/other' });
   });
@@ -65,7 +64,7 @@ describe('resume_session uses session cwd', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: contextCwd, permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      context: { cwd: contextCwd, cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
       sdkHost: mockSdkHost,
     });
 
@@ -102,7 +101,7 @@ describe('resume_session uses session cwd', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: contextCwd, permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      context: { cwd: contextCwd, cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
       sdkHost: mockSdkHost,
     });
 
@@ -127,7 +126,7 @@ describe('resume_session uses session cwd', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: contextCwd, permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      context: { cwd: contextCwd, cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
       sdkHost: mockSdkHost,
     });
 
@@ -160,7 +159,7 @@ describe('resume_session uses session cwd', () => {
     };
 
     const app = createBridgeApp({
-      context: { cwd: contextCwd, permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      context: { cwd: contextCwd, cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
       sdkHost: mockSdkHost,
     });
 

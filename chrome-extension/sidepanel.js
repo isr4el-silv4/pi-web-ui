@@ -23,7 +23,6 @@ const els = {
   cwdInput: document.querySelector('#cwd-input'),
   cookies: document.querySelector('#cookies'),
   storage: document.querySelector('#storage'),
-  mode: document.querySelector('#mode'),
   devtoolsWarning: document.querySelector('#devtools-warning'),
   attachedTabsList: document.querySelector('#attached-tabs-list'),
   sessionSelect: document.querySelector('#session-select'),
@@ -65,12 +64,11 @@ function truncate(text, maxLength) {
 }
 
 function render() {
-  els.status.textContent = state.bridgeOnline ? `Bridge online · ${state.permissionMode}` : 'Bridge offline';
+  els.status.textContent = state.bridgeOnline ? 'Bridge online' : 'Bridge offline';
   els.offline.hidden = state.bridgeOnline;
   els.session.hidden = !state.bridgeOnline;
   els.cookies.checked = state.cookieAccessEnabled;
   els.storage.checked = state.storageAccessEnabled;
-  els.mode.value = state.permissionMode;
   els.devtoolsWarning.hidden = !state.devtoolsConflict;
   
   // Update send button state
@@ -411,7 +409,6 @@ els.cwdInput.addEventListener('input', () => {
 
 els.cookies.addEventListener('change', () => client.sendCommand({ type: 'set_cookie_access', enabled: els.cookies.checked }));
 els.storage.addEventListener('change', () => client.sendCommand({ type: 'set_storage_access', enabled: els.storage.checked }));
-els.mode.addEventListener('change', () => client.sendCommand({ type: 'set_permission_mode', mode: els.mode.value }));
 
 // Session selector change handler
 els.sessionSelect.addEventListener('change', () => {

@@ -6,14 +6,12 @@ describe('bridge start context', () => {
     expect(parseStartContext(JSON.stringify({
       cwd: '/project',
       sessionPath: '/session.jsonl',
-      permissionMode: 'debug',
       cookieAccessEnabled: false,
       storageAccessEnabled: false,
       port: 43117,
     }))).toEqual({
       cwd: '/project',
       sessionPath: '/session.jsonl',
-      permissionMode: 'debug',
       cookieAccessEnabled: false,
       storageAccessEnabled: false,
       port: 43117,
@@ -23,7 +21,6 @@ describe('bridge start context', () => {
   it('uses safe defaults when optional values are omitted', () => {
     expect(parseStartContext(JSON.stringify({ cwd: '/project' }))).toEqual({
       cwd: '/project',
-      permissionMode: 'debug',
       cookieAccessEnabled: false,
       storageAccessEnabled: false,
       port: 43117,

@@ -1,9 +1,8 @@
-import { DEFAULT_BRIDGE_PORT, isPermissionMode, type PermissionMode } from '../protocol/index.js';
+import { DEFAULT_BRIDGE_PORT } from '../protocol/index.js';
 
 export interface BridgeStartContext {
   cwd: string;
   sessionPath?: string;
-  permissionMode: PermissionMode;
   cookieAccessEnabled: boolean;
   storageAccessEnabled: boolean;
   port: number;
@@ -30,7 +29,6 @@ export function parseStartContext(serialized: string | undefined): BridgeStartCo
   return {
     cwd: parsed.cwd,
     ...(typeof parsed.sessionPath === 'string' ? { sessionPath: parsed.sessionPath } : {}),
-    permissionMode: isPermissionMode(parsed.permissionMode) ? parsed.permissionMode : 'debug',
     cookieAccessEnabled: typeof parsed.cookieAccessEnabled === 'boolean' ? parsed.cookieAccessEnabled : false,
     storageAccessEnabled: typeof parsed.storageAccessEnabled === 'boolean' ? parsed.storageAccessEnabled : false,
     port: typeof parsed.port === 'number' ? parsed.port : DEFAULT_BRIDGE_PORT,

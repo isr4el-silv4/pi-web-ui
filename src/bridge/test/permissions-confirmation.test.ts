@@ -8,7 +8,7 @@ describe('browser tool confirmation enforcement', () => {
     const audit = { record: vi.fn() };
     const executor = createBrowserToolExecutor(
       { ...transport, confirm, audit },
-      { id: 's1', cwd: '/', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false },
+      { id: 's1', cwd: '/', cookieAccessEnabled: false, storageAccessEnabled: false },
     );
 
     await expect(executor.execute('debugger.evaluateScript', { expression: '1+1' })).resolves.toEqual({ result: 2 });
@@ -19,7 +19,7 @@ describe('browser tool confirmation enforcement', () => {
   it('blocks risky tools when confirmation is denied', async () => {
     const executor = createBrowserToolExecutor(
       { requestBrowserTool: vi.fn(), confirm: vi.fn(async () => false) },
-      { id: 's1', cwd: '/', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false },
+      { id: 's1', cwd: '/', cookieAccessEnabled: false, storageAccessEnabled: false },
     );
 
     await expect(executor.execute('debugger.sendCdpCommand', { method: 'Page.navigate' })).rejects.toThrow('Raw CDP command requires confirmation');

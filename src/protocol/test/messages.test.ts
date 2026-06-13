@@ -6,7 +6,6 @@ import {
   isBrowserToolRequest,
   isBrowserToolResponse,
   isClientCommand,
-  isPermissionMode,
 } from '../index.js';
 
 describe('protocol messages', () => {
@@ -42,19 +41,11 @@ describe('protocol messages', () => {
     expect(isBrowserToolResponse({ ...response, success: 'yes' })).toBe(false);
   });
 
-  it('recognizes supported permission modes', () => {
-    expect(isPermissionMode('observe')).toBe(true);
-    expect(isPermissionMode('debug')).toBe(true);
-    expect(isPermissionMode('control')).toBe(true);
-    expect(isPermissionMode('admin')).toBe(false);
-  });
-
   it('identifies initial side panel client commands', () => {
     expect(isClientCommand({ type: 'prompt', message: 'Check console errors' })).toBe(true);
     expect(isClientCommand({ type: 'abort' })).toBe(true);
     expect(isClientCommand({ type: 'new_session', cwd: '/tmp/project' })).toBe(true);
     expect(isClientCommand({ type: 'resume_session', sessionPath: '/tmp/session.jsonl' })).toBe(true);
-    expect(isClientCommand({ type: 'set_permission_mode', mode: 'debug' })).toBe(true);
     expect(isClientCommand({ type: 'set_cookie_access', enabled: false })).toBe(true);
     expect(isClientCommand({ type: 'extension_ui_response', id: 'ui-1', value: true })).toBe(true);
     expect(isClientCommand({ type: 'set_cookie_access', enabled: 'false' })).toBe(false);

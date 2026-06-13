@@ -4,7 +4,7 @@ import { createBrowserToolExecutor } from '../browser-tools.js';
 describe('bridge browser tool executor', () => {
   it('forwards allowed tool calls to chrome extension clients', async () => {
     const requestBrowserTool = vi.fn(async () => ({ logs: [] }));
-    const executor = createBrowserToolExecutor({ requestBrowserTool }, { id: 's1', cwd: '/', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false });
+    const executor = createBrowserToolExecutor({ requestBrowserTool }, { id: 's1', cwd: '/', cookieAccessEnabled: false, storageAccessEnabled: false });
 
     await expect(executor.execute('console.getLogs', { tabId: 'active' })).resolves.toEqual({ logs: [] });
     expect(requestBrowserTool).toHaveBeenCalledWith('console.getLogs', { tabId: 'active' });
@@ -12,7 +12,7 @@ describe('bridge browser tool executor', () => {
 
   it('blocks disallowed tools before forwarding', async () => {
     const requestBrowserTool = vi.fn();
-    const executor = createBrowserToolExecutor({ requestBrowserTool }, { id: 's1', cwd: '/', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false });
+    const executor = createBrowserToolExecutor({ requestBrowserTool }, { id: 's1', cwd: '/', cookieAccessEnabled: false, storageAccessEnabled: false });
 
     await expect(executor.execute('cookies.get', {})).rejects.toThrow('Cookie access is disabled');
     expect(requestBrowserTool).not.toHaveBeenCalled();

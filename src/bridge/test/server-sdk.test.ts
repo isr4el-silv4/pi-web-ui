@@ -5,7 +5,7 @@ describe('bridge app sdk session integration', () => {
   it('creates an SDK session on startup and when switching sessions', async () => {
     const sdkHost = { create: vi.fn(async (options) => ({ sdk: true, ...options })) };
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
       sdkHost,
     });
 
@@ -21,7 +21,7 @@ describe('bridge app sdk session integration', () => {
     const events: any[] = [];
     const sdkHost = { create: vi.fn(async () => ({ sdk: true })) };
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
       sdkHost,
     });
 
@@ -46,7 +46,7 @@ describe('bridge app sdk session integration', () => {
     const events: any[] = [];
     const sdkHost = { create: vi.fn(async () => ({ sdk: true })) };
     const app = createBridgeApp({
-      context: { cwd: '/project', permissionMode: 'debug', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
       sdkHost,
     });
 
