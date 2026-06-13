@@ -18,6 +18,7 @@ describe('side panel state', () => {
       sessionsList: [],
       loadingSessions: false,
       sessionError: null,
+      reconnectExhausted: false,
     });
   });
 
@@ -260,5 +261,11 @@ describe('side panel state', () => {
     ];
     const state = reduceSidePanelState(createInitialState(), { type: 'session_history', messages: history });
     expect(state.messages).toEqual(history);
+  });
+
+  it('sets reconnectExhausted=true on bridge_reconnect_exhausted event', () => {
+    const state = reduceSidePanelState(createInitialState(), { type: 'bridge_reconnect_exhausted' });
+    expect(state.reconnectExhausted).toBe(true);
+    expect(state.bridgeOnline).toBe(false);
   });
 });

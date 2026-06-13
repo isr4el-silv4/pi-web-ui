@@ -269,4 +269,152 @@ describe('extension bridge client', () => {
 
     expect(onEvent).toHaveBeenCalledWith({ type: 'session_history', messages });
   });
+
+  it('schedules reconnection on close', async () => {
+    vi.useFakeTimers();
+    const connectCalls = [];
+    const sockets = [];
+    class FakeWebSocket {
+      constructor(url) {
+        this.readyState = 1;
+        sockets.push(this);
+        connectCalls.push(url);
+      }
+      addEventListener(name, handler) {
+        if (name === 'open') handler();
+        if (name === 'close') this._onClose = handler;
+      }
+      send() {}
+      close() {}
+    }
+
+    const client = createBridgeClient({ WebSocketCtor: FakeWebSocket, port: 43117 });
+    client.connect();
+    expect(connectCalls).toHaveLength(1);
+
+    // Trigger close on the first socket
+    sockets[0]._onClose({ code: 1006, reason: '' });
+    expect(connectCalls).toHaveLength(1); // Not reconnected yet, waiting for timer
+
+    // Advance timer past the reconnect delay
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(connectCalls).toHaveLength(2); // Reconnected
+
+    vi.useRealTimers();
+  });
+
+  it('retries up to 7 times then emits bridge_reconnect_exhausted', async () => {
+    vi.useFakeTimers();
+    const connectCalls = [];
+    const sockets = [];
+    class FakeWebSocket {
+      constructor(url) {
+        this.readyState = 1;
+        sockets.push(this);
+        connectCalls.push(url);
+      }
+      addEventListener(name, handler) {
+        if (name === 'open') handler();
+        if (name === 'close') this._onClose = handler;
+      }
+      send() {}
+      close() {}
+    }
+
+    const onEvent = vi.fn();
+    const client = createBridgeClient({ WebSocketCtor: FakeWebSocket, port: 43117, onEvent });
+    client.connect();
+    expect(connectCalls).toHaveLength(1);
+
+    // Exhaust all 7 reconnect attempts
+    for (let i = 0; i < 7; i++) {
+      sockets[sockets.length - 1]._onClose({ code: 1006, reason: '' });
+      await vi.advanceTimersByTimeAsync(2000);
+    }
+
+    // After 7 disconnects: 6 reconnects happen, 7th disconnect exhausts
+    expect(connectCalls).toHaveLength(7); // 1 initial + 6 reconnects
+    expect(onEvent).toHaveBeenCalledWith({ type: 'bridge_reconnect_exhausted' });
+
+    // One more close should NOT trigger another reconnect
+    sockets[sockets.length - 1]._onClose({ code: 1006, reason: '' });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(connectCalls).toHaveLength(7); // No new connection
+
+    vi.useRealTimers();
+  });
+
+  it('resets reconnect counter on successful reconnection', async () => {
+    vi.useFakeTimers();
+    const connectCalls = [];
+    const sockets = [];
+    class FakeWebSocket {
+      constructor(url) {
+        this.readyState = 1;
+        sockets.push(this);
+        connectCalls.push(url);
+      }
+      addEventListener(name, handler) {
+        if (name === 'open') handler();
+        if (name === 'close') this._onClose = handler;
+      }
+      send() {}
+      close() {}
+    }
+
+    const onEvent = vi.fn();
+    const client = createBridgeClient({ WebSocketCtor: FakeWebSocket, port: 43117, onEvent });
+    client.connect();
+
+    // Disconnect 3 times - counter accumulates (no reset on open)
+    for (let i = 0; i < 3; i++) {
+      sockets[sockets.length - 1]._onClose({ code: 1006, reason: '' });
+      await vi.advanceTimersByTimeAsync(2000);
+    }
+    expect(connectCalls).toHaveLength(4); // 1 initial + 3 reconnects
+
+    // 4 more disconnects: 3 reconnects + 1 exhaust (counter at 7)
+    for (let i = 0; i < 4; i++) {
+      sockets[sockets.length - 1]._onClose({ code: 1006, reason: '' });
+      await vi.advanceTimersByTimeAsync(2000);
+    }
+    expect(connectCalls).toHaveLength(7); // 4 + 3 reconnects, 4th disconnect exhausts
+    expect(onEvent).toHaveBeenCalledWith({ type: 'bridge_reconnect_exhausted' });
+
+    vi.useRealTimers();
+  });
+
+  it('disconnect() cancels pending reconnection and prevents further reconnects', async () => {
+    vi.useFakeTimers();
+    const connectCalls = [];
+    const sockets = [];
+    class FakeWebSocket {
+      constructor(url) {
+        this.readyState = 1;
+        sockets.push(this);
+        connectCalls.push(url);
+      }
+      addEventListener(name, handler) {
+        if (name === 'open') handler();
+        if (name === 'close') this._onClose = handler;
+      }
+      send() {}
+      close() {}
+    }
+
+    const client = createBridgeClient({ WebSocketCtor: FakeWebSocket, port: 43117 });
+    client.connect();
+    expect(connectCalls).toHaveLength(1);
+
+    // Trigger close to schedule reconnect
+    sockets[0]._onClose({ code: 1006, reason: '' });
+    // Don't advance timer yet — call disconnect instead
+    client.disconnect();
+
+    // Advance timer — should NOT reconnect
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(connectCalls).toHaveLength(1);
+
+    vi.useRealTimers();
+  });
 });

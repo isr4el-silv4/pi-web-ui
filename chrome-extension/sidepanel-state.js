@@ -14,6 +14,7 @@ export function createInitialState() {
     sessionsList: [],
     loadingSessions: false,
     sessionError: null,
+    reconnectExhausted: false,
   };
 }
 
@@ -21,7 +22,7 @@ export function reduceSidePanelState(state, event) {
   console.log('[SidePanel] Event:', event.type, event);
   switch (event.type) {
     case 'bridge_connected':
-      return { ...state, bridgeOnline: true, sendError: null };
+      return { ...state, bridgeOnline: true, sendError: null, notifications: [] };
     case 'bridge_disconnected':
       return { ...state, bridgeOnline: false };
     case 'session_state':
@@ -88,6 +89,8 @@ export function reduceSidePanelState(state, event) {
         sending: false,
         ...(event.cwd ? { session: { ...state.session, cwd: event.cwd } } : {}),
       };
+    case 'bridge_reconnect_exhausted':
+      return { ...state, reconnectExhausted: true, bridgeOnline: false };
     default:
       return state;
   }

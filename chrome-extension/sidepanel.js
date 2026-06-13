@@ -10,6 +10,7 @@ let client;
 const els = {
   status: document.querySelector('#status'),
   offline: document.querySelector('#offline'),
+  reloadBanner: document.querySelector('#reload-banner'),
   session: document.querySelector('#session'),
   messages: document.querySelector('#messages'),
   uiRequests: document.querySelector('#ui-requests'),
@@ -65,7 +66,8 @@ function truncate(text, maxLength) {
 
 function render() {
   els.status.textContent = state.bridgeOnline ? 'Bridge online' : 'Bridge offline';
-  els.offline.hidden = state.bridgeOnline;
+  els.offline.hidden = state.bridgeOnline || state.reconnectExhausted;
+  els.reloadBanner.hidden = !state.reconnectExhausted;
   els.session.hidden = !state.bridgeOnline;
   els.cookies.checked = state.cookieAccessEnabled;
   els.storage.checked = state.storageAccessEnabled;

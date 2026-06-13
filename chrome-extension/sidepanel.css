@@ -74,6 +74,7 @@ h1 { font-size: 16px; margin: 0; }
 
 main { padding: 12px; overflow-wrap: break-word; }
 #offline { background: #fff4ce; padding: 10px; border-radius: 6px; overflow-wrap: break-word; }
+.reload-banner { background: #fce8e6; padding: 10px; border-radius: 6px; color: #c5221f; font-weight: 600; overflow-wrap: break-word; }
 #session { display: grid; gap: 8px; margin-bottom: 12px; }
 #messages { display: grid; gap: 8px; overflow-wrap: break-word; }
 .message { padding: 8px; border-radius: 6px; background: #f2f2f2; white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word; max-width: 100%; box-sizing: border-box; }
