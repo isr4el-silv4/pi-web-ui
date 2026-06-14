@@ -30,6 +30,7 @@ const els = {
   sessionSelect: document.querySelector('#session-select'),
   sessionError: document.querySelector('#session-error'),
   headerCwdRow: document.querySelector('#header-cwd-row'),
+  themeToggle: document.querySelector('#theme-toggle'),
 };
 
 let selectedCwd = null;
@@ -68,6 +69,7 @@ function truncate(text, maxLength) {
 
 function render() {
   els.status.textContent = state.bridgeOnline ? 'Bridge online' : 'Bridge offline';
+  els.status.classList.toggle('online', state.bridgeOnline);
   els.offline.hidden = state.bridgeOnline || state.reconnectExhausted;
   els.reloadBanner.hidden = !state.reconnectExhausted;
   els.session.hidden = !state.bridgeOnline;
@@ -453,6 +455,33 @@ els.sessionSelect.addEventListener('change', () => {
   } else if (value) {
     // Resume session
     client.sendCommand({ type: 'resume_session', sessionPath: value });
+  }
+});
+
+// ── Theme toggle ──────────────────────────────────────────
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('pi-web-ui-theme', theme);
+}
+
+function getPreferredTheme() {
+  const stored = localStorage.getItem('pi-web-ui-theme');
+  if (stored) return stored;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+// Initialize theme
+applyTheme(getPreferredTheme());
+
+els.themeToggle.addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme');
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+});
+
+// Listen for system theme changes
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  if (!localStorage.getItem('pi-web-ui-theme')) {
+    applyTheme(e.matches ? 'dark' : 'light');
   }
 });
 
