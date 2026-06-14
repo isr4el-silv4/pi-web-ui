@@ -3,6 +3,12 @@
   "name": "Pi Web UI",
   "version": "0.1.0",
   "description": "Chrome side-panel UI for Pi backed by a local bridge.",
+  "icons": {
+    "16": "pi-icon-16.png",
+    "32": "pi-icon-32.png",
+    "48": "pi-icon-48.png",
+    "128": "pi-icon-128.png"
+  },
   "permissions": ["debugger", "tabs", "activeTab", "scripting", "cookies", "storage", "sidePanel", "webRequest", "fileSystem"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },
