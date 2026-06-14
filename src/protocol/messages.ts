@@ -22,7 +22,7 @@ export type ServerEvent =
   | { type: 'prompt_received'; message: string }
   | { type: 'prompt_sent'; message: string }
   | { type: 'prompt_error'; message: string; error: string }
-  | { type: 'assistant_message'; text: string }
+  | { type: 'assistant_message'; text: string; thinking?: string }
   | { type: 'tool_call'; name: string; params: unknown }
   | { type: 'tool_result'; name: string; result: unknown }
   | { type: 'extension_ui_request'; id: string; kind: string; message: string; options?: unknown }

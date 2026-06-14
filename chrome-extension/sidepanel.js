@@ -140,7 +140,7 @@ function render() {
           item.appendChild(thinkingToggle);
           item.appendChild(thinkingBlock);
         }
-        item.innerHTML += renderMarkdown(message.text);
+        item.insertAdjacentHTML('beforeend', renderMarkdown(message.text));
         break;
 
       case 'tool': {
