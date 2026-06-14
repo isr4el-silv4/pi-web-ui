@@ -3,7 +3,3 @@ dist/
 coverage/
 .DS_Store
 *.log
-.idea/
-plans/
-*.md
-!README.md
