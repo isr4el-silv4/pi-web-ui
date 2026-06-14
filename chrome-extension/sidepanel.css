@@ -384,7 +384,7 @@ main {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 12px 14px;
+  padding: 12px 14px 20px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -503,6 +503,10 @@ main::-webkit-scrollbar-thumb:hover {
   gap: 6px;
   flex: 1;
   min-height: 0;
+}
+
+#messages .message:last-child {
+  margin-bottom: 16px;
 }
 
 .message {

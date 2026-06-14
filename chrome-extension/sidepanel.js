@@ -13,6 +13,7 @@ const els = {
   reloadBanner: document.querySelector('#reload-banner'),
   session: document.querySelector('#session'),
   messages: document.querySelector('#messages'),
+  main: document.querySelector('main'),
   uiRequests: document.querySelector('#header-ui-requests'),
   notifications: document.querySelector('#notifications'),
   form: document.querySelector('#prompt-form'),
@@ -206,7 +207,7 @@ function render() {
     els.messages.append(item);
   }
   // Scroll to bottom of messages
-  els.messages.scrollTop = els.messages.scrollHeight;
+  els.main.scrollTop = els.main.scrollHeight;
 
   // Render session selector dropdown
   renderSessionSelect();
