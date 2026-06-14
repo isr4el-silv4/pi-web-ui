@@ -292,9 +292,10 @@ function renderSessionSelect() {
 function renderErrorPill() {
   if (state.sessionError && state.sessionError.trim()) {
     els.sessionError.textContent = `⚠ ${state.sessionError}`;
-    els.sessionError.hidden = false;
+    els.sessionError.classList.add('visible');
   } else {
-    els.sessionError.hidden = true;
+    els.sessionError.classList.remove('visible');
+    els.sessionError.textContent = '';
   }
 }
 
