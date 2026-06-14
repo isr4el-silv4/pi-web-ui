@@ -381,6 +381,22 @@ els.form.addEventListener('submit', (event) => {
     dispatch({ type: 'prompt_error', message, error: error.message });
   }
   els.prompt.value = '';
+  autoResizePrompt();
+});
+
+// Auto-grow textarea + Enter to send, Shift+Enter for newline
+function autoResizePrompt() {
+  els.prompt.style.height = 'auto';
+  els.prompt.style.height = Math.min(els.prompt.scrollHeight, 180) + 'px';
+}
+
+els.prompt.addEventListener('input', autoResizePrompt);
+
+els.prompt.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    els.form.dispatchEvent(new Event('submit', { cancelable: true }));
+  }
 });
 
 els.abortButton.addEventListener('click', (event) => {

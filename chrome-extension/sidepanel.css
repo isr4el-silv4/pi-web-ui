@@ -847,8 +847,8 @@ main::-webkit-scrollbar-thumb:hover {
 }
 
 #prompt {
-  flex: 1;
-  min-width: 0;
+  flex: 0 0 auto;
+  width: 100%;
   font-family: inherit;
   font-size: 13px;
   padding: 8px 12px;
@@ -857,6 +857,11 @@ main::-webkit-scrollbar-thumb:hover {
   background: var(--paper);
   color: var(--ink);
   outline: none;
+  resize: none;
+  overflow-y: hidden;
+  min-height: 36px;
+  max-height: 180px;
+  line-height: 1.5;
   transition: border-color var(--transition), background var(--transition), color var(--transition), box-shadow var(--transition);
 }
 
