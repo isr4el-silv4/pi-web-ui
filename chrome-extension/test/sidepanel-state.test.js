@@ -226,6 +226,27 @@ describe('side panel state', () => {
     expect(state.loadingSessions).toBe(false);
   });
 
+  it('clears sessionError when sessions_list arrives after an error', () => {
+    const withError = reduceSidePanelState(createInitialState(), { type: 'session_error', error: 'Failed to load session' });
+    expect(withError.sessionError).toBe('Failed to load session');
+    const loaded = reduceSidePanelState(withError, {
+      type: 'sessions_list',
+      sessions: [{ path: '/project/.pi/sessions/2024-01-01.jsonl' }],
+    });
+    expect(loaded.sessionError).toBeNull();
+    expect(loaded.loadingSessions).toBe(false);
+  });
+
+  it('clears sessionError when session_history arrives', () => {
+    const withError = reduceSidePanelState(createInitialState(), { type: 'session_error', error: 'Failed to load session' });
+    expect(withError.sessionError).toBe('Failed to load session');
+    const history = reduceSidePanelState(withError, {
+      type: 'session_history',
+      messages: [{ role: 'user', text: 'Hello' }],
+    });
+    expect(history.sessionError).toBeNull();
+  });
+
   it('replaces messages on session_history event', () => {
     // Start with existing messages
     const withMessages = reduceSidePanelState(createInitialState(), { type: 'user_message', text: 'Old message' });

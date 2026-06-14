@@ -290,7 +290,7 @@ function renderSessionSelect() {
 }
 
 function renderErrorPill() {
-  if (state.sessionError) {
+  if (state.sessionError && state.sessionError.trim()) {
     els.sessionError.textContent = `⚠ ${state.sessionError}`;
     els.sessionError.hidden = false;
   } else {

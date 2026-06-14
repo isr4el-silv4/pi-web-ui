@@ -87,9 +87,9 @@ export function reduceSidePanelState(state, event) {
     case 'loading_sessions':
       return { ...state, loadingSessions: true, sessionError: null };
     case 'sessions_loaded':
-      return { ...state, sessionsList: event.sessions, loadingSessions: false };
+      return { ...state, sessionsList: event.sessions, loadingSessions: false, sessionError: null };
     case 'sessions_list':
-      return { ...state, sessionsList: event.sessions, loadingSessions: false };
+      return { ...state, sessionsList: event.sessions, loadingSessions: false, sessionError: null };
     case 'session_error':
       return { ...state, sessionError: event.error, loadingSessions: false };
     case 'session_history':
@@ -99,6 +99,7 @@ export function reduceSidePanelState(state, event) {
         ...state, 
         messages: event.messages, 
         sending: false,
+        sessionError: null,
         ...(event.cwd ? { session: { ...state.session, cwd: event.cwd } } : {}),
       };
     case 'bridge_reconnect_exhausted':
