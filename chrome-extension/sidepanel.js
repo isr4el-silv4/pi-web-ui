@@ -17,7 +17,8 @@ const els = {
   notifications: document.querySelector('#notifications'),
   form: document.querySelector('#prompt-form'),
   prompt: document.querySelector('#prompt'),
-  sendButton: document.querySelector('#prompt-form button'),
+  sendButton: document.querySelector('#prompt-form button:not(#abort-button)'),
+  abortButton: document.querySelector('#abort-button'),
   cwdDisplay: document.querySelector('#cwd-display'),
   cwdPicker: document.querySelector('#cwd-picker'),
   cwdWarning: document.querySelector('#cwd-warning'),
@@ -73,11 +74,11 @@ function render() {
   els.storage.checked = state.storageAccessEnabled;
   els.devtoolsWarning.hidden = !state.devtoolsConflict;
   
-  // Update send button state
-  const isDisabled = !state.bridgeOnline || state.sending;
-  els.sendButton.disabled = isDisabled;
-  els.sendButton.textContent = state.sending ? 'Sending...' : 'Send';
-  els.prompt.disabled = isDisabled;
+  // Update Send/Abort button toggle
+  const isBusy = state.sending;
+  els.sendButton.hidden = isBusy;
+  els.abortButton.hidden = !isBusy;
+  els.prompt.disabled = !state.bridgeOnline || isBusy;
   
   // Show send error if present
   let errorEl = document.querySelector('#send-error');
@@ -189,6 +190,10 @@ function render() {
         item.appendChild(summary);
         break;
       }
+
+      case 'system':
+        item.textContent = message.text;
+        break;
 
       default:
         item.textContent = message.text || '';
@@ -371,6 +376,26 @@ els.form.addEventListener('submit', (event) => {
     dispatch({ type: 'prompt_error', message, error: error.message });
   }
   els.prompt.value = '';
+});
+
+els.abortButton.addEventListener('click', (event) => {
+  event.preventDefault();
+  console.log('[SidePanel] Abort button clicked, bridgeOnline:', state.bridgeOnline);
+  if (!state.bridgeOnline) {
+    console.log('[SidePanel] Bridge is offline, not sending abort');
+    return;
+  }
+  try {
+    console.log('[SidePanel] Sending abort command to bridge');
+    client.sendCommand({ type: 'abort' });
+    console.log('[SidePanel] Abort command sent successfully');
+  } catch (error) {
+    console.error('[SidePanel] Failed to send abort command:', error.message);
+    dispatch({ type: 'bridge_error', error: error.message });
+    return;
+  }
+  console.log('[SidePanel] Dispatching abort_sent');
+  dispatch({ type: 'abort_sent' });
 });
 
 els.cwdPicker.addEventListener('click', async () => {

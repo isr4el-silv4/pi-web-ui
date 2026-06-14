@@ -151,6 +151,20 @@ main { padding: 12px; overflow-wrap: break-word; }
 #cwd-input { font-family: monospace; font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; width: 100%; box-sizing: border-box; }
 .send-error { padding: 8px 12px; background: #fce8e6; color: #c5221f; border-radius: 6px; margin-bottom: 8px; font-size: 12px; overflow-wrap: break-word; }
 #prompt-form button:disabled, #prompt:disabled { opacity: 0.5; cursor: not-allowed; }
+#abort-button {
+  background: #c5221f;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0 16px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+#abort-button:hover {
+  background: #a41514;
+}
 #notifications { overflow-wrap: break-word; word-break: break-word; }
 #ui-requests .message { overflow-wrap: break-word; word-break: break-word; }
 
