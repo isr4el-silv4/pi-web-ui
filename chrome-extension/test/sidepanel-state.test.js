@@ -268,4 +268,185 @@ describe('side panel state', () => {
     expect(state.reconnectExhausted).toBe(true);
     expect(state.bridgeOnline).toBe(false);
   });
+
+  it('handles abort_sent — clears sending, adds aborted message', () => {
+    const sending = reduceSidePanelState(createInitialState(), { type: 'user_message', text: 'Do something' });
+    expect(sending.sending).toBe(true);
+
+    const aborted = reduceSidePanelState(sending, { type: 'abort_sent' });
+    expect(aborted.sending).toBe(false);
+    expect(aborted.sendError).toBeNull();
+    expect(aborted.messages).toEqual([
+      { role: 'user', text: 'Do something' },
+      { role: 'system', text: '⚠ Aborted' },
+    ]);
+  });
+
+  it('handles abort_sent when not sending — still adds aborted message', () => {
+    const state = reduceSidePanelState(createInitialState(), { type: 'abort_sent' });
+    expect(state.sending).toBe(false);
+    expect(state.messages).toEqual([{ role: 'system', text: '⚠ Aborted' }]);
+  });
+
+  it('handles abort_received — no additional UI change', () => {
+    const withAborted = reduceSidePanelState(createInitialState(), { type: 'abort_sent' });
+    const confirmed = reduceSidePanelState(withAborted, { type: 'abort_received' });
+    expect(confirmed).toBe(withAborted); // same state, no changes
+  });
+
+  it('clears sendError on abort_sent', () => {
+    let state = reduceSidePanelState(createInitialState(), { type: 'user_message', text: 'Hi' });
+    state = reduceSidePanelState(state, { type: 'prompt_error', message: 'Hi', error: 'Network error' });
+    expect(state.sendError).toBe('Network error');
+
+    const aborted = reduceSidePanelState(state, { type: 'abort_sent' });
+    expect(aborted.sendError).toBeNull();
+    expect(aborted.sending).toBe(false);
+  });
+
+  // === Live chat: tool_call / tool_result events ===
+
+  it('appends tool message on tool_call event', () => {
+    const state = reduceSidePanelState(createInitialState(), {
+      type: 'tool_call',
+      name: 'read_file',
+      params: { path: 'foo.txt' },
+    });
+    expect(state.messages).toEqual([
+      { role: 'tool', toolName: 'read_file', toolResult: '(running...)', isError: false },
+    ]);
+  });
+
+  it('updates last tool message on tool_result event', () => {
+    let state = reduceSidePanelState(createInitialState(), {
+      type: 'tool_call',
+      name: 'read_file',
+      params: {},
+    });
+    state = reduceSidePanelState(state, {
+      type: 'tool_result',
+      name: 'read_file',
+      result: 'file content here',
+    });
+    expect(state.messages).toEqual([
+      { role: 'tool', toolName: 'read_file', toolResult: 'file content here', isError: false },
+    ]);
+  });
+
+  it('serializes tool_result as JSON when result is an object', () => {
+    let state = reduceSidePanelState(createInitialState(), {
+      type: 'tool_call',
+      name: 'glob',
+      params: {},
+    });
+    state = reduceSidePanelState(state, {
+      type: 'tool_result',
+      name: 'glob',
+      result: { files: ['a.ts', 'b.ts'] },
+    });
+    expect(state.messages[0].toolResult).toBe('{\n  "files": [\n    "a.ts",\n    "b.ts"\n  ]\n}');
+  });
+
+  it('ignores tool_result when last message is not a tool message', () => {
+    let state = reduceSidePanelState(createInitialState(), {
+      type: 'user_message',
+      text: 'Hello',
+    });
+    state = reduceSidePanelState(state, {
+      type: 'tool_result',
+      name: 'read_file',
+      result: 'content',
+    });
+    // Should not add or modify anything
+    expect(state.messages).toEqual([{ role: 'user', text: 'Hello' }]);
+  });
+
+  it('handles multiple tool_call/tool_result sequences', () => {
+    let state = createInitialState();
+    state = reduceSidePanelState(state, { type: 'tool_call', name: 'read_file', params: {} });
+    state = reduceSidePanelState(state, { type: 'tool_result', name: 'read_file', result: 'content1' });
+    state = reduceSidePanelState(state, { type: 'tool_call', name: 'write_file', params: {} });
+    state = reduceSidePanelState(state, { type: 'tool_result', name: 'write_file', result: 'wrote 10 bytes' });
+
+    expect(state.messages).toHaveLength(2);
+    expect(state.messages[0]).toEqual({ role: 'tool', toolName: 'read_file', toolResult: 'content1', isError: false });
+    expect(state.messages[1]).toEqual({ role: 'tool', toolName: 'write_file', toolResult: 'wrote 10 bytes', isError: false });
+  });
+
+  // === Live chat: thinking events ===
+
+  it('appends thinking message on thinking event', () => {
+    const state = reduceSidePanelState(createInitialState(), {
+      type: 'thinking',
+      text: 'Let me think about this...',
+    });
+    expect(state.messages).toEqual([
+      { role: 'assistant', text: '', thinking: 'Let me think about this...' },
+    ]);
+  });
+
+  it('updates existing thinking message on subsequent thinking events', () => {
+    let state = reduceSidePanelState(createInitialState(), {
+      type: 'thinking',
+      text: 'Part 1 ',
+    });
+    state = reduceSidePanelState(state, {
+      type: 'thinking',
+      text: 'Part 2',
+    });
+    expect(state.messages).toEqual([
+      { role: 'assistant', text: '', thinking: 'Part 1 Part 2' },
+    ]);
+  });
+
+  it('handles assistant_message with thinking field', () => {
+    const state = reduceSidePanelState(createInitialState(), {
+      type: 'assistant_message',
+      text: 'Here is my response',
+      thinking: 'I thought about it carefully',
+    });
+    expect(state.messages).toEqual([
+      { role: 'assistant', text: 'Here is my response', thinking: 'I thought about it carefully' },
+    ]);
+  });
+
+  it('handles assistant_message without thinking field', () => {
+    const state = reduceSidePanelState(createInitialState(), {
+      type: 'assistant_message',
+      text: 'Simple response',
+    });
+    expect(state.messages).toEqual([
+      { role: 'assistant', text: 'Simple response', thinking: undefined },
+    ]);
+  });
+
+  it('full live chat flow: user -> tool_call -> tool_result -> assistant', () => {
+    let state = createInitialState();
+    state = reduceSidePanelState(state, { type: 'user_message', text: 'Read foo.txt' });
+    state = reduceSidePanelState(state, { type: 'tool_call', name: 'read_file', params: {} });
+    state = reduceSidePanelState(state, { type: 'tool_result', name: 'read_file', result: 'hello world' });
+    state = reduceSidePanelState(state, { type: 'assistant_message', text: 'The file contains: hello world' });
+
+    expect(state.messages).toEqual([
+      { role: 'user', text: 'Read foo.txt' },
+      { role: 'tool', toolName: 'read_file', toolResult: 'hello world', isError: false },
+      { role: 'assistant', text: 'The file contains: hello world', thinking: undefined },
+    ]);
+    expect(state.sending).toBe(false);
+  });
+
+  it('full live chat flow with thinking: user -> thinking -> tool -> assistant with thinking', () => {
+    let state = createInitialState();
+    state = reduceSidePanelState(state, { type: 'user_message', text: 'Analyze this' });
+    state = reduceSidePanelState(state, { type: 'thinking', text: 'Let me analyze...' });
+    state = reduceSidePanelState(state, { type: 'tool_call', name: 'bash', params: {} });
+    state = reduceSidePanelState(state, { type: 'tool_result', name: 'bash', result: 'output' });
+    state = reduceSidePanelState(state, { type: 'assistant_message', text: 'Done!', thinking: 'Analysis complete' });
+
+    expect(state.messages).toHaveLength(4);
+    expect(state.messages[0]).toEqual({ role: 'user', text: 'Analyze this' });
+    expect(state.messages[1]).toEqual({ role: 'assistant', text: '', thinking: 'Let me analyze...' });
+    expect(state.messages[2]).toEqual({ role: 'tool', toolName: 'bash', toolResult: 'output', isError: false });
+    expect(state.messages[3]).toEqual({ role: 'assistant', text: 'Done!', thinking: 'Analysis complete' });
+  });
 });

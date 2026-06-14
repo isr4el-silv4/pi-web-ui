@@ -36,7 +36,19 @@ export function reduceSidePanelState(state, event) {
     case 'user_message':
       return { ...state, messages: [...state.messages, { role: 'user', text: event.text }], sending: true, sendError: null };
     case 'assistant_message':
-      return { ...state, messages: [...state.messages, { role: 'assistant', text: event.text }], sending: false, sendError: null };
+      return { ...state, messages: [...state.messages, { role: 'assistant', text: event.text, thinking: event.thinking }], sending: false, sendError: null };
+    case 'tool_call':
+      return { ...state, messages: [...state.messages, { role: 'tool', toolName: event.name, toolResult: '(running...)', isError: false }] };
+    case 'tool_result': {
+      const msgs = [...state.messages];
+      const lastIdx = msgs.length - 1;
+      if (lastIdx >= 0 && msgs[lastIdx].role === 'tool') {
+        const last = msgs[lastIdx];
+        const result = typeof event.result === 'string' ? event.result : JSON.stringify(event.result, null, 2);
+        msgs[lastIdx] = { ...last, toolResult: result };
+      }
+      return { ...state, messages: msgs };
+    }
     case 'prompt_sent':
       // Confirmed prompt reached the model
       return { ...state, sendError: null };
@@ -91,6 +103,31 @@ export function reduceSidePanelState(state, event) {
       };
     case 'bridge_reconnect_exhausted':
       return { ...state, reconnectExhausted: true, bridgeOnline: false };
+    case 'abort_sent':
+      // Optimistic: user clicked abort — show "Aborted" message, clear sending state
+      return {
+        ...state,
+        sending: false,
+        sendError: null,
+        messages: [...state.messages, { role: 'system', text: '⚠ Aborted' }],
+      };
+    case 'thinking':
+      // Model is thinking — append/update thinking indicator
+      {
+        const msgs = [...state.messages];
+        const lastIdx = msgs.length - 1;
+        if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant' && msgs[lastIdx].thinking !== undefined) {
+          // Update existing thinking message
+          msgs[lastIdx] = { ...msgs[lastIdx], thinking: msgs[lastIdx].thinking + (event.text || '') };
+        } else {
+          // Append new thinking message
+          msgs.push({ role: 'assistant', text: '', thinking: event.text || '' });
+        }
+        return { ...state, messages: msgs };
+      }
+    case 'abort_received':
+      // Server confirmed abort — no additional UI change needed
+      return state;
     default:
       return state;
   }

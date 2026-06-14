@@ -45,11 +45,21 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
               const text = Array.isArray(content)
                 ? content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n')
                 : typeof content === 'string' ? content : JSON.stringify(content);
-              console.log('[Bridge] Broadcasting assistant_message, text length:', text?.length ?? 0);
-              if (text) {
-                clients.broadcast({ type: 'assistant_message', text });
+              // Extract thinking block if present
+              let thinking: string | undefined;
+              if (Array.isArray(content)) {
+                const thinkingBlock = content.find((c: any) => c?.type === 'thinking');
+                if (thinkingBlock) {
+                  thinking = thinkingBlock.thinking || thinkingBlock.text || '';
+                }
+              }
+              console.log('[Bridge] Broadcasting assistant_message, text length:', text?.length ?? 0, 'thinking:', !!thinking);
+              if (text || thinking) {
+                const msg: { type: string; text: string; thinking?: string } = { type: 'assistant_message', text: text || '' };
+                if (thinking) msg.thinking = thinking;
+                clients.broadcast(msg);
               } else {
-                console.log('[Bridge] No text content in assistant message_end event');
+                console.log('[Bridge] No text or thinking content in assistant message_end event');
               }
             }
           } else if (event.type === 'tool_execution_start') {

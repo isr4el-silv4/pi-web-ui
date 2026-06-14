@@ -125,6 +125,69 @@ describe('bridge prompt relay', () => {
     });
   });
 
+  it('relays assistant messages with thinking block from SDK session', async () => {
+    let subscribeCallback: ((event: Record<string, unknown>) => void) | undefined;
+    const sdkHost = {
+      create: vi.fn().mockResolvedValue({
+        prompt: vi.fn().mockResolvedValue(undefined),
+        subscribe: vi.fn((cb) => {
+          subscribeCallback = cb;
+          return () => {};
+        }),
+      }),
+    };
+
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 0 },
+      sdkHost,
+    });
+    const httpServer = createServer();
+    attachWebSocketServer(httpServer, app);
+    servers.push(httpServer);
+    await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+    const address = httpServer.address();
+    if (typeof address !== 'object' || address === null) throw new Error('missing server address');
+
+    const ws = new WebSocket(`ws://127.0.0.1:${address.port}`);
+    servers.push(ws);
+    await new Promise<void>((resolve) => ws.once('open', resolve));
+
+    // Wait for SDK to be ready
+    await app.ready;
+
+    // Set up listener for async prompt_sent BEFORE sending
+    const asyncSent = waitForMessage(ws);
+    // Send a prompt and consume sync messages
+    const syncMessages = collectMessages(ws, 2);
+    ws.send(JSON.stringify({ type: 'prompt', message: 'Hi' }));
+    await syncMessages;
+    // Consume the async prompt_sent
+    await asyncSent;
+
+    // Now listen for assistant message relay
+    const assistantMessage = waitForMessage(ws);
+
+    // Trigger a message_end event with thinking block
+    if (subscribeCallback) {
+      subscribeCallback({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: 'Let me think about this carefully...' },
+            { type: 'text', text: 'Here is my answer.' },
+          ],
+        },
+      });
+    }
+
+    await expect(assistantMessage).resolves.toMatchObject({
+      type: 'assistant_message',
+      text: 'Here is my answer.',
+      thinking: 'Let me think about this carefully...',
+    });
+  });
+
   it('queues prompt when SDK is not yet ready, forwards it once ready', async () => {
     let promptCalls: Array<{ text: string }> = [];
     let resolveSdk: () => void;
