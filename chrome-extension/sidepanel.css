@@ -17,6 +17,14 @@ header {
   margin-bottom: 6px;
 }
 
+.header-badge {
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+  margin-right: 6px;
+  border-radius: 4px;
+}
+
 h1 { font-size: 16px; margin: 0; }
 #status { font-size: 12px; font-weight: 600; color: #555; overflow-wrap: break-word; }
 
