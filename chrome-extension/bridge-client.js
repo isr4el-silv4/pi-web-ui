@@ -12,13 +12,15 @@ export function createBridgeClient({ WebSocketCtor = WebSocket, port = 43117, on
     socket.addEventListener('open', () => {
       console.log('[BridgeClient] Connected!');
       onEvent({ type: 'bridge_connected' });
-      // Fetch session state from HTTP /status as a reliable source of truth
+      // On connect, always start a new session (never restore the old one).
+      // Fetch cwd from /status so we can create the new session in the same directory.
       fetch(`http://127.0.0.1:${port}/status`)
         .then((res) => res.json())
         .then((data) => {
-          if (data.session) {
-            console.log('[BridgeClient] Fetched session state from /status:', data.session);
-            onEvent({ type: 'session_state', session: data.session });
+          const cwd = data.session?.cwd || data.cwd;
+          if (cwd) {
+            console.log('[BridgeClient] Starting new session on connect with cwd:', cwd);
+            socket.send(JSON.stringify({ type: 'new_session', cwd }));
           }
         })
         .catch((err) => console.error('[BridgeClient] Failed to fetch /status:', err));

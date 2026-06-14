@@ -417,4 +417,110 @@ describe('extension bridge client', () => {
 
     vi.useRealTimers();
   });
+
+  it('sends new_session on connect with cwd from /status instead of restoring old session', async () => {
+    const sent = [];
+    const listeners = {};
+    class FakeWebSocket {
+      constructor() { this.readyState = 1; }
+      addEventListener(name, handler) { listeners[name] = handler; }
+      send(message) { sent.push(message); }
+      close() {}
+    }
+
+    // Mock fetch to return a previous session with cwd
+    const mockFetch = vi.fn().mockResolvedValue({
+      json: async () => ({ session: { id: 'old-session', cwd: '/home/user/project' } }),
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mockFetch;
+
+    const onEvent = vi.fn();
+    const client = createBridgeClient({ WebSocketCtor: FakeWebSocket, port: 43117, onEvent });
+    client.connect();
+
+    // Trigger open event — should send new_session instead of session_state
+    listeners.open();
+    
+    // Wait for all microtasks to complete (fetch -> json -> send)
+    await new Promise(r => setTimeout(r, 0));
+
+    // Should have called fetch to get cwd
+    expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:43117/status');
+
+    // Should send new_session with the cwd from the old session
+    expect(sent).toEqual([JSON.stringify({ type: 'new_session', cwd: '/home/user/project' })]);
+
+    // Should NOT dispatch session_state from /status (that was the old buggy behavior)
+    expect(onEvent).toHaveBeenCalledWith({ type: 'bridge_connected' });
+    expect(onEvent).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'session_state' }));
+
+    globalThis.fetch = originalFetch;
+  });
+
+  it('does not send new_session on connect when /status has no cwd', async () => {
+    const sent = [];
+    const listeners = {};
+    class FakeWebSocket {
+      constructor() { this.readyState = 1; }
+      addEventListener(name, handler) { listeners[name] = handler; }
+      send(message) { sent.push(message); }
+      close() {}
+    }
+
+    // Mock fetch to return no session
+    const mockFetch = vi.fn().mockResolvedValue({
+      json: async () => ({}),
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mockFetch;
+
+    const client = createBridgeClient({ WebSocketCtor: FakeWebSocket, port: 43117 });
+    client.connect();
+
+    listeners.open();
+    await new Promise(r => setTimeout(r, 0));
+
+    // Should have called fetch
+    expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:43117/status');
+
+    // Should NOT send new_session when there's no cwd
+    expect(sent).toEqual([]);
+
+    globalThis.fetch = originalFetch;
+  });
+
+  it('does not send new_session on connect when /status fetch fails', async () => {
+    const sent = [];
+    const listeners = {};
+    class FakeWebSocket {
+      constructor() { this.readyState = 1; }
+      addEventListener(name, handler) { listeners[name] = handler; }
+      send(message) { sent.push(message); }
+      close() {}
+    }
+
+    // Mock fetch to throw an error
+    const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mockFetch;
+
+    const onEvent = vi.fn();
+    const client = createBridgeClient({ WebSocketCtor: FakeWebSocket, port: 43117, onEvent });
+    client.connect();
+
+    listeners.open();
+    await new Promise(r => setTimeout(r, 0));
+
+    // Should have called fetch
+    expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:43117/status');
+
+    // Should NOT send new_session when fetch fails
+    expect(sent).toEqual([]);
+
+    // Should still emit bridge_connected
+    expect(onEvent).toHaveBeenCalledWith({ type: 'bridge_connected' });
+
+    globalThis.fetch = originalFetch;
+  });
 });
