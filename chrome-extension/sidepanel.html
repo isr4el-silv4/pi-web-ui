@@ -13,6 +13,21 @@
         <div id="status">Bridge offline</div>
       </div>
       <div id="attached-tabs-list" class="attached-tabs-list"></div>
+      <div id="header-cwd-row" class="header-cwd-row" hidden>
+        <div class="cwd-path-row">
+          <span class="cwd-label">cwd</span>
+          <span id="cwd-display" class="cwd-path">not set</span>
+          <button id="cwd-picker" class="cwd-picker-btn">Browse…</button>
+        </div>
+        <div class="resume-row">
+          <span class="resume-label">Resume</span>
+          <div class="session-select-wrapper">
+            <select id="session-select" disabled>
+              <option value="">— No sessions for this directory —</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </header>
     <main>
       <section id="offline">Start Pi Web UI from terminal Pi with: <code>/pi-web-ui start</code></section>
@@ -21,15 +36,7 @@
         <div id="devtools-warning" class="devtools-warning" hidden>
           ⚠ Chrome DevTools is open on the active tab. Pi Web UI cannot capture network requests while DevTools is open. Close DevTools (F12) to resume.
         </div>
-        <div class="cwd-row">
-          <label>cwd <span id="cwd-display">not set</span> <button id="cwd-picker">Browse…</button></label>
-          <label class="resume-label">
-            Resume
-            <select id="session-select" disabled>
-              <option value="">— No sessions for this directory —</option>
-            </select>
-          </label>
-        </div>
+
         <div id="session-error" class="error-pill" hidden></div>
         <div id="cwd-warning" class="cwd-warning" hidden>⚠ Only directory name detected. Pi may not find this directory. Enter the full path below:</div>
         <input id="cwd-input" type="text" placeholder="Full path to project directory" hidden />

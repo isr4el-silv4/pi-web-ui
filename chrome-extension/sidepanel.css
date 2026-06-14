@@ -109,28 +109,100 @@ main { padding: 12px; overflow-wrap: break-word; }
 #prompt-form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #ddd; position: sticky; bottom: 0; background: white; }
 #prompt { flex: 1; min-width: 0; }
 #cwd-display { font-family: monospace; font-size: 12px; color: #555; overflow-wrap: break-word; word-break: break-all; }
-#cwd-picker { font-size: 12px; padding: 2px 8px; cursor: pointer; flex-shrink: 0; }
-.cwd-row {
+
+/* Header cwd row */
+.header-cwd-row {
+  margin-top: 8px;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.resume-label {
+.cwd-path-row {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
 }
 
-#session-select {
+.cwd-label {
+  font-size: 12px;
+  color: #555;
+  flex-shrink: 0;
+}
+
+.cwd-path {
   font-family: monospace;
   font-size: 12px;
-  padding: 2px 6px;
-  border: 1px solid #ddd;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.cwd-picker-btn {
+  font-size: 12px;
+  padding: 2px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid #ccc;
   border-radius: 4px;
+  line-height: 1.4;
+}
+
+.cwd-picker-btn:hover {
+  background: #f0f0f0;
+}
+
+.resume-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resume-label {
+  font-size: 12px;
+  color: #555;
+  flex-shrink: 0;
+}
+
+.session-select-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.session-select-wrapper::after {
+  content: '▾';
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 12px;
+  color: #555;
+}
+
+#session-select {
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  padding: 4px 28px 4px 12px;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  background: #f0f0f0;
+  color: #333;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   max-width: 300px;
+  width: 100%;
+}
+
+#session-select:hover {
+  background: #e8e8e8;
 }
 
 #session-select:disabled {

@@ -29,6 +29,7 @@ const els = {
   attachedTabsList: document.querySelector('#attached-tabs-list'),
   sessionSelect: document.querySelector('#session-select'),
   sessionError: document.querySelector('#session-error'),
+  headerCwdRow: document.querySelector('#header-cwd-row'),
 };
 
 let selectedCwd = null;
@@ -70,6 +71,7 @@ function render() {
   els.offline.hidden = state.bridgeOnline || state.reconnectExhausted;
   els.reloadBanner.hidden = !state.reconnectExhausted;
   els.session.hidden = !state.bridgeOnline;
+  els.headerCwdRow.hidden = !state.bridgeOnline;
   els.cookies.checked = state.cookieAccessEnabled;
   els.storage.checked = state.storageAccessEnabled;
   els.devtoolsWarning.hidden = !state.devtoolsConflict;
