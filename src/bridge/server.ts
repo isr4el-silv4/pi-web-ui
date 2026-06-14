@@ -16,6 +16,8 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
   sessions.createSession(options.context);
   let sdkSession: unknown;
   let unsubscribeSdk: (() => void) | undefined;
+  // Track whether the user requested an abort — suppress any message_end arriving after
+  let aborted = false;
 
   function setupSdkSubscription(session: unknown) {
     // Clean up previous subscription
@@ -30,16 +32,25 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           console.log('[Bridge] SDK event received:', event.type, event);
           // SDK emits: message_end (with message.role), tool_execution_start/update/end, etc.
           if (event.type === 'message_end' && event.message?.role === 'assistant') {
-            // Extract text content from assistant message
-            const content = event.message.content;
-            const text = Array.isArray(content)
-              ? content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n')
-              : typeof content === 'string' ? content : JSON.stringify(content);
-            console.log('[Bridge] Broadcasting assistant_message, text length:', text?.length ?? 0);
-            if (text) {
-              clients.broadcast({ type: 'assistant_message', text });
+            // Skip messages that arrive after the user clicked abort — the model may finish
+            // generating before the abort signal reaches the provider, resulting in a
+            // normal stopReason ("end_turn") instead of "aborted"
+            if (aborted) {
+              console.log('[Bridge] Suppressing assistant message_end — abort was requested');
+            } else if ((event.message as any).stopReason === 'aborted') {
+              console.log('[Bridge] Skipping aborted assistant message_end');
             } else {
-              console.log('[Bridge] No text content in assistant message_end event');
+              // Extract text content from assistant message
+              const content = event.message.content;
+              const text = Array.isArray(content)
+                ? content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n')
+                : typeof content === 'string' ? content : JSON.stringify(content);
+              console.log('[Bridge] Broadcasting assistant_message, text length:', text?.length ?? 0);
+              if (text) {
+                clients.broadcast({ type: 'assistant_message', text });
+              } else {
+                console.log('[Bridge] No text content in assistant message_end event');
+              }
             }
           } else if (event.type === 'tool_execution_start') {
             console.log('[Bridge] Broadcasting tool_call:', event.toolName);
@@ -110,6 +121,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     handleClientCommand(command: ClientCommand) {
       switch (command.type) {
         case 'new_session': {
+          aborted = false;
           const resolvedCwd = resolveCwd(command.cwd);
           const session = sessions.createSession({ cwd: resolvedCwd });
           // Clear chat history for the new session
@@ -125,6 +137,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           return session;
         }
         case 'resume_session': {
+          aborted = false;
           // 1. Build and broadcast session history (async, fires in background)
           buildSessionHistory(command.sessionPath)
             .then(({ messages, cwd: sessionCwd }) => {
@@ -175,6 +188,8 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
         case 'set_storage_access':
           return sessions.setStorageAccess(command.enabled);
         case 'prompt':
+          // Reset abort flag so the new prompt's response is allowed through
+          aborted = false;
           console.log('[Bridge] Prompt received, sdkSession exists:', !!sdkSession, 'has prompt method:', typeof (sdkSession as any)?.prompt);
           // Queue prompt if SDK session isn't ready yet — retry once it becomes available
           if (!sdkSession) {
@@ -216,6 +231,28 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           clients.broadcast({ type: 'prompt_received', message: command.message });
           return sessions.getCurrentSession();
         case 'abort':
+          aborted = true;
+          console.log('[Bridge] Abort received, sdkSession exists:', !!sdkSession);
+          if (sdkSession) {
+            const abortMethod = (sdkSession as any).abort;
+            console.log('[Bridge] sdkSession.abort type:', typeof abortMethod, 'is function:', typeof abortMethod === 'function');
+            console.log('[Bridge] sdkSession keys:', Object.keys(sdkSession));
+            if (typeof abortMethod === 'function') {
+              console.log('[Bridge] Calling sdkSession.abort() immediately');
+              const abortPromise = (sdkSession as any).abort();
+              console.log('[Bridge] sdkSession.abort() returned promise:', !!abortPromise);
+              abortPromise.catch((error: unknown) => {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error('[Bridge] sdkSession.abort() failed:', errorMessage);
+                clients.broadcast({ type: 'bridge_error', error: `Abort failed: ${errorMessage}` });
+              });
+            } else {
+              console.log('[Bridge] Skipping sdkSession.abort() — no abort method on session');
+              console.log('[Bridge] Available methods on sdkSession:', Object.getOwnPropertyNames(Object.getPrototypeOf(sdkSession)));
+            }
+          } else {
+            console.log('[Bridge] Skipping sdkSession.abort() — session not ready');
+          }
           clients.broadcast({ type: 'abort_received' });
           return sessions.getCurrentSession();
         case 'extension_ui_response':

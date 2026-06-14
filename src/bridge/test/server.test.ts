@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createBridgeApp } from '../server.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -165,7 +165,7 @@ describe('resume_session uses session cwd', () => {
 
     // Capture broadcasted events
     const broadcastedEvents: unknown[] = [];
-    vi.spyOn(app.browserClients, 'broadcast').mockImplementation((event: unknown) => {
+    vi.spyOn(app.browserClients, 'broadcast').mockImplementation((event: any) => {
       broadcastedEvents.push(event);
     });
 
@@ -179,5 +179,335 @@ describe('resume_session uses session cwd', () => {
     const sessionHistoryEvent = broadcastedEvents.find((e: any) => e.type === 'session_history');
     expect(sessionHistoryEvent).toBeDefined();
     expect((sessionHistoryEvent as any).cwd).toBe(sessionCwd);
+  });
+});
+
+describe('bridge app abort', () => {
+  it('broadcasts abort_received when abort command is received', () => {
+    const events: unknown[] = [];
+    const sdkHost = {
+      create: vi.fn(async () => ({ prompt: vi.fn(), subscribe: vi.fn() })),
+    };
+
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      sdkHost,
+    });
+
+    const originalBroadcast = app.browserClients.broadcast.bind(app.browserClients);
+    app.browserClients.broadcast = vi.fn((event: any) => {
+      events.push(event);
+      return originalBroadcast(event);
+    });
+
+    app.handleClientCommand({ type: 'abort' });
+
+    expect(events).toContainEqual({ type: 'abort_received' });
+  });
+
+  it('calls sdkSession.abort() when SDK session is ready', async () => {
+    const abortFn = vi.fn().mockResolvedValue(undefined);
+    const sdkHost = {
+      create: vi.fn(async () => ({ prompt: vi.fn(), subscribe: vi.fn(), abort: abortFn })),
+    };
+
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      sdkHost,
+    });
+
+    await app.ready;
+
+    app.handleClientCommand({ type: 'abort' });
+
+    // Abort is called synchronously — no timeout needed
+    expect(abortFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not throw when sdkSession has no abort method', async () => {
+    const sdkHost = {
+      create: vi.fn(async () => ({ prompt: vi.fn(), subscribe: vi.fn() })), // no abort
+    };
+
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      sdkHost,
+    });
+
+    await app.ready;
+
+    // Should not throw
+    expect(() => app.handleClientCommand({ type: 'abort' })).not.toThrow();
+  });
+
+  it('broadcasts bridge_error when sdkSession.abort() fails', async () => {
+    const abortFn = vi.fn().mockRejectedValue(new Error('Abort failed for some reason'));
+    const sdkHost = {
+      create: vi.fn(async () => ({ prompt: vi.fn(), subscribe: vi.fn(), abort: abortFn })),
+    };
+
+    const events: unknown[] = [];
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      sdkHost,
+    });
+
+    // Wait for SDK session to be ready
+    await app.ready;
+
+    vi.spyOn(app.browserClients, 'broadcast').mockImplementation((event: any) => {
+      events.push(event);
+    });
+
+    app.handleClientCommand({ type: 'abort' });
+
+    // Wait for ready.then() + abort().catch() chain to complete
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    const errorEvent = events.find((e: any) => e.type === 'bridge_error');
+    expect(errorEvent).toBeDefined();
+    expect((errorEvent as any).error).toContain('Abort failed:');
+  });
+
+  it('still broadcasts abort_received even when SDK session is not ready', () => {
+    const events: unknown[] = [];
+    const sdkHost = {
+      create: vi.fn(async () => ({ prompt: vi.fn(), subscribe: vi.fn(), abort: vi.fn() })),
+    };
+
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      sdkHost,
+    });
+
+    const originalBroadcast = app.browserClients.broadcast.bind(app.browserClients);
+    app.browserClients.broadcast = vi.fn((event: any) => {
+      events.push(event);
+      return originalBroadcast(event);
+    });
+
+    // Don't wait for ready — send abort immediately
+    app.handleClientCommand({ type: 'abort' });
+
+    // abort_received should be broadcast immediately
+    expect(events).toContainEqual({ type: 'abort_received' });
+  });
+
+  it('does NOT broadcast assistant_message for message_end with stopReason "aborted"', async () => {
+    // Capture the subscribe callback so we can simulate SDK events
+    let subscribeCallback: ((event: any) => void) | undefined;
+    const sdkHost = {
+      create: vi.fn(async () => ({
+        prompt: vi.fn(),
+        subscribe: vi.fn((cb: (event: any) => void) => {
+          subscribeCallback = cb;
+          return () => {};
+        }),
+        abort: vi.fn(),
+      })),
+    };
+
+    const events: unknown[] = [];
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      sdkHost,
+    });
+
+    await app.ready;
+
+    vi.spyOn(app.browserClients, 'broadcast').mockImplementation((event: any) => {
+      events.push(event);
+    });
+
+    // Simulate SDK emitting a message_end with stopReason "aborted" and partial text
+    subscribeCallback?.({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'This is a partial response that was aborted' }],
+        stopReason: 'aborted',
+        errorMessage: 'Request was aborted',
+      },
+    });
+
+    // Verify that assistant_message was NOT broadcast
+    const assistantMessages = events.filter((e: any) => e.type === 'assistant_message');
+    expect(assistantMessages).toHaveLength(0);
+  });
+
+  it('does NOT broadcast assistant_message after abort even with stopReason "end_turn"', async () => {
+    // This is the real-world scenario: user clicks abort, but the model finishes
+    // generating before the abort signal reaches the provider
+    let subscribeCallback: ((event: any) => void) | undefined;
+    const sdkHost = {
+      create: vi.fn(async () => ({
+        prompt: vi.fn(),
+        subscribe: vi.fn((cb: (event: any) => void) => {
+          subscribeCallback = cb;
+          return () => {};
+        }),
+        abort: vi.fn().mockResolvedValue(undefined),
+      })),
+    };
+
+    const events: unknown[] = [];
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      sdkHost,
+    });
+
+    await app.ready;
+
+    vi.spyOn(app.browserClients, 'broadcast').mockImplementation((event: any) => {
+      events.push(event);
+    });
+
+    // User clicks abort
+    app.handleClientCommand({ type: 'abort' });
+
+    // Model finishes normally (stopReason: "end_turn") — should still be suppressed
+    subscribeCallback?.({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'This is a complete response that arrived after abort' }],
+        stopReason: 'end_turn',
+      },
+    });
+
+    // Verify that assistant_message was NOT broadcast
+    const assistantMessages = events.filter((e: any) => e.type === 'assistant_message');
+    expect(assistantMessages).toHaveLength(0);
+  });
+
+  it('resets abort flag on new prompt so the next response is allowed', async () => {
+    let subscribeCallback: ((event: any) => void) | undefined;
+    const sdkHost = {
+      create: vi.fn(async () => ({
+        prompt: vi.fn().mockResolvedValue(undefined),
+        subscribe: vi.fn((cb: (event: any) => void) => {
+          subscribeCallback = cb;
+          return () => {};
+        }),
+        abort: vi.fn().mockResolvedValue(undefined),
+      })),
+    };
+
+    const events: unknown[] = [];
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      sdkHost,
+    });
+
+    await app.ready;
+
+    vi.spyOn(app.browserClients, 'broadcast').mockImplementation((event: any) => {
+      events.push(event);
+    });
+
+    // User aborts
+    app.handleClientCommand({ type: 'abort' });
+
+    // Then sends a new prompt (which resets the abort flag)
+    app.handleClientCommand({ type: 'prompt', message: 'New question' });
+
+    // Now the response should be allowed through
+    subscribeCallback?.({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Response to the new prompt' }],
+        stopReason: 'end_turn',
+      },
+    });
+
+    const assistantMessages = events.filter((e: any) => e.type === 'assistant_message');
+    expect(assistantMessages).toHaveLength(1);
+    expect((assistantMessages[0] as any).text).toBe('Response to the new prompt');
+  });
+
+  it('DOES broadcast assistant_message for normal message_end without stopReason "aborted"', async () => {
+    // Capture the subscribe callback so we can simulate SDK events
+    let subscribeCallback: ((event: any) => void) | undefined;
+    const sdkHost = {
+      create: vi.fn(async () => ({
+        prompt: vi.fn(),
+        subscribe: vi.fn((cb: (event: any) => void) => {
+          subscribeCallback = cb;
+          return () => {};
+        }),
+        abort: vi.fn(),
+      })),
+    };
+
+    const events: unknown[] = [];
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      sdkHost,
+    });
+
+    await app.ready;
+
+    vi.spyOn(app.browserClients, 'broadcast').mockImplementation((event: any) => {
+      events.push(event);
+    });
+
+    // Simulate SDK emitting a normal message_end (not aborted)
+    subscribeCallback?.({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'This is a normal response' }],
+        stopReason: 'end_turn',
+      },
+    });
+
+    // Verify that assistant_message WAS broadcast
+    const assistantMessages = events.filter((e: any) => e.type === 'assistant_message');
+    expect(assistantMessages).toHaveLength(1);
+    expect((assistantMessages[0] as any).text).toBe('This is a normal response');
+  });
+
+  it('DOES broadcast assistant_message for message_end with stopReason "error" (not aborted)', async () => {
+    // Error messages that are NOT abort-related should still be broadcast
+    let subscribeCallback: ((event: any) => void) | undefined;
+    const sdkHost = {
+      create: vi.fn(async () => ({
+        prompt: vi.fn(),
+        subscribe: vi.fn((cb: (event: any) => void) => {
+          subscribeCallback = cb;
+          return () => {};
+        }),
+        abort: vi.fn(),
+      })),
+    };
+
+    const events: unknown[] = [];
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      sdkHost,
+    });
+
+    await app.ready;
+
+    vi.spyOn(app.browserClients, 'broadcast').mockImplementation((event: any) => {
+      events.push(event);
+    });
+
+    // Simulate SDK emitting a message_end with stopReason "error" (not aborted)
+    subscribeCallback?.({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Error response text' }],
+        stopReason: 'error',
+        errorMessage: 'Some error occurred',
+      },
+    });
+
+    // Error messages should still be broadcast (only "aborted" is filtered)
+    const assistantMessages = events.filter((e: any) => e.type === 'assistant_message');
+    expect(assistantMessages).toHaveLength(1);
+    expect((assistantMessages[0] as any).text).toBe('Error response text');
   });
 });
