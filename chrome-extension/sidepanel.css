@@ -142,6 +142,31 @@ header {
   flex-shrink: 0;
 }
 
+/* Header checkboxes (cookies, storage) */
+.header-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-tertiary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: color var(--transition);
+}
+
+.header-checkbox:hover {
+  color: var(--ink-secondary);
+}
+
+.header-checkbox input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+
 #status {
   font-size: 11px;
   font-weight: 500;
@@ -471,22 +496,6 @@ main::-webkit-scrollbar-thumb:hover {
   border-color: var(--accent);
 }
 
-#session label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--ink-secondary);
-  cursor: pointer;
-}
-
-#session input[type="checkbox"] {
-  accent-color: var(--accent);
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
-}
-
 /* ── Messages ───────────────────────────────────────────── */
 #messages {
   display: flex;
@@ -785,38 +794,44 @@ main::-webkit-scrollbar-thumb:hover {
   display: block;
 }
 
-/* ── UI Requests ────────────────────────────────────────── */
-#ui-requests {
+/* ── Header UI Requests (action-required banners) ──── */
+#header-ui-requests {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  padding-top: 8px;
 }
 
-#ui-requests .message {
+.header-ui-request {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  color: var(--accent-text);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning-text);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
-#ui-requests button {
-  background: var(--accent);
-  color: #fff;
+.header-ui-request button {
+  background: var(--warning-text);
+  color: var(--warning-bg);
   border: none;
   border-radius: var(--radius-sm);
   padding: 4px 14px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   flex-shrink: 0;
   transition: opacity var(--transition);
 }
 
-#ui-requests button:hover {
-  opacity: 0.85;
+.header-ui-request button:hover {
+  opacity: 0.8;
 }
 
 /* ── Notifications ──────────────────────────────────────── */
@@ -837,9 +852,6 @@ main::-webkit-scrollbar-thumb:hover {
 
 /* ── Prompt form ────────────────────────────────────────── */
 #prompt-form {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   padding: 10px 14px;
   border-top: 1px solid var(--border);
   background: var(--surface);
@@ -847,8 +859,15 @@ main::-webkit-scrollbar-thumb:hover {
   transition: background var(--transition), border-color var(--transition);
 }
 
+.prompt-input-wrapper {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
 #prompt {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   font-family: inherit;
   font-size: 13px;
   padding: 8px 12px;
@@ -892,41 +911,45 @@ main::-webkit-scrollbar-thumb:hover {
   cursor: not-allowed;
 }
 
-#prompt-form button[type="submit"] {
-  background: var(--accent);
-  color: #fff;
+/* Action buttons embedded beside the textarea */
+.prompt-action-btn {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
   border: none;
   border-radius: var(--radius);
-  padding: 0 16px;
   cursor: pointer;
-  font-weight: 500;
-  font-size: 13px;
-  font-family: inherit;
-  flex-shrink: 0;
-  transition: opacity var(--transition), background var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition), opacity var(--transition);
+  padding: 0;
 }
 
-#prompt-form button[type="submit"]:hover {
+.prompt-action-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Send button */
+#send-button {
+  background: var(--accent);
+  color: #fff;
+}
+
+#send-button:hover {
   opacity: 0.85;
 }
 
-#prompt-form button[type="submit"]:disabled {
+#send-button:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 
+/* Abort button */
 #abort-button {
-  background: var(--error-text);
+  background: #ef4444;
   color: #fff;
-  border: none;
-  border-radius: var(--radius);
-  padding: 0 16px;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 13px;
-  font-family: inherit;
-  flex-shrink: 0;
-  transition: opacity var(--transition);
 }
 
 #abort-button:hover {

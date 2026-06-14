@@ -13,11 +13,11 @@ const els = {
   reloadBanner: document.querySelector('#reload-banner'),
   session: document.querySelector('#session'),
   messages: document.querySelector('#messages'),
-  uiRequests: document.querySelector('#ui-requests'),
+  uiRequests: document.querySelector('#header-ui-requests'),
   notifications: document.querySelector('#notifications'),
   form: document.querySelector('#prompt-form'),
   prompt: document.querySelector('#prompt'),
-  sendButton: document.querySelector('#prompt-form button:not(#abort-button)'),
+  sendButton: document.querySelector('#send-button'),
   abortButton: document.querySelector('#abort-button'),
   cwdDisplay: document.querySelector('#cwd-display'),
   cwdPicker: document.querySelector('#cwd-picker'),
@@ -102,7 +102,7 @@ function render() {
   els.uiRequests.innerHTML = '';
   for (const request of state.uiRequests) {
     const item = document.createElement('div');
-    item.className = 'message';
+    item.className = 'header-ui-request';
     item.textContent = request.message ?? request.kind;
     const ok = document.createElement('button');
     ok.textContent = 'OK';
