@@ -838,6 +838,7 @@ main::-webkit-scrollbar-thumb:hover {
 /* ── Prompt form ────────────────────────────────────────── */
 #prompt-form {
   display: flex;
+  flex-direction: column;
   gap: 6px;
   padding: 10px 14px;
   border-top: 1px solid var(--border);
@@ -847,7 +848,6 @@ main::-webkit-scrollbar-thumb:hover {
 }
 
 #prompt {
-  flex: 0 0 auto;
   width: 100%;
   font-family: inherit;
   font-size: 13px;
@@ -858,11 +858,24 @@ main::-webkit-scrollbar-thumb:hover {
   color: var(--ink);
   outline: none;
   resize: none;
-  overflow-y: hidden;
+  overflow-y: auto;
   min-height: 36px;
   max-height: 180px;
   line-height: 1.5;
   transition: border-color var(--transition), background var(--transition), color var(--transition), box-shadow var(--transition);
+}
+
+#prompt::-webkit-scrollbar {
+  width: 4px;
+}
+
+#prompt::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#prompt::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: 10px;
 }
 
 #prompt:focus {
