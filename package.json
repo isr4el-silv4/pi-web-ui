@@ -1,6 +1,6 @@
 {
   "name": "pi-web-ui",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": false,
   "description": "Chrome side-panel UI and local bridge extension for Pi.",
   "type": "module",
