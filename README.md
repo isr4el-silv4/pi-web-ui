@@ -1,4 +1,6 @@
-<img src="pi-badge.svg" width="64" alt="Pi Coding Agent"> &nbsp; <img src="Google_Chrome_logo.png" width="64" alt="Google Chrome">
+<div align="center">
+  <img src="pi-badge.svg" width="64" alt="Pi Coding Agent"> &nbsp; <img src="Google_Chrome_logo.png" width="64" alt="Google Chrome">
+</div>
 
 ---
 
