@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="pi-badge.svg" width="64" alt="Pi Coding Agent"> &nbsp; <img src="Google_Chrome_logo.png" width="64" alt="Google Chrome">
+  <img src="https://i.imgur.com/kRzvtpk.webp" alt="pi-web-ui screenshot" style="max-width:800px;">
 </div>
 
 # pi-web-ui
