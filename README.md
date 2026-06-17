@@ -1,11 +1,13 @@
+<img src="pi-badge.svg" width="64" alt="Pi Coding Agent"> &nbsp; <img src="Google_Chrome_logo.png" width="64" alt="Google Chrome">
+
+---
+
 # pi-web-ui
 
 **A local bridge that gives Pi Coding Agent direct browser control — so you can work in your terminal and your browser without ever breaking context.**
 
 [![npm version](https://img.shields.io/npm/v/pi-web-ui.svg)](https://www.npmjs.com/package/pi-web-ui)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-
-<img src="pi-badge.svg" width="120" alt="Pi Coding Agent"> &nbsp; <img src="Google_Chrome_logo.png" width="48" alt="Google Chrome">
 
 ---
 
