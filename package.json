@@ -22,6 +22,12 @@
     "harness",
     "browser-tools"
   ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "image": "https://imgur.com/a/Gum942M"
+  },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.78.1",
     "@sinclair/typebox": "^0.34.49",
