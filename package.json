@@ -31,7 +31,7 @@
     "extensions": [
       "./index.ts"
     ],
-    "image": "https://imgur.com/a/Gum942M"
+    "image": "https://i.imgur.com/kRzvtpk.jpeg"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.78.1",
