@@ -5,8 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/pi-web-ui.svg)](https://www.npmjs.com/package/pi-web-ui)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-![Pi Coding Agent](pi-badge.svg)
-![Google Chrome](Google_Chrome_logo.png)
+<img src="pi-badge.svg" width="120" alt="Pi Coding Agent"> &nbsp; <img src="Google_Chrome_logo.png" width="48" alt="Google Chrome">
 
 ---
 
