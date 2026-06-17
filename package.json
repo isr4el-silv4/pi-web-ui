@@ -11,6 +11,17 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi",
+    "pi-coding-agent",
+    "chrome",
+    "chromium",
+    "ai",
+    "harness",
+    "browser-tools"
+  ],
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.78.1",
     "@sinclair/typebox": "^0.34.49",
