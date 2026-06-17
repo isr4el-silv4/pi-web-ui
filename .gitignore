@@ -4,5 +4,4 @@ coverage/
 .DS_Store
 *.log
 .idea/
-abort-button-plan.md
 plans/
