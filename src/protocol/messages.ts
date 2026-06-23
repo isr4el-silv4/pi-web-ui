@@ -8,7 +8,9 @@ export type ClientCommand =
   | { type: 'list_sessions'; cwd: string }
   | { type: 'set_cookie_access'; enabled: boolean }
   | { type: 'set_storage_access'; enabled: boolean }
-  | { type: 'extension_ui_response'; id: string; value: unknown };
+  | { type: 'extension_ui_response'; id: string; value: unknown }
+  | { type: 'list_resources' }
+  | { type: 'get_completions'; command: string; args: string };
 
 export type SessionHistoryMessage =
   | { role: 'user'; text: string; image?: { data: string; mimeType: string } }
@@ -29,7 +31,34 @@ export type ServerEvent =
   | { type: 'extension_ui_notify'; message: string }
   | { type: 'bridge_error'; error: string }
   | { type: 'sessions_list'; sessions: Array<{ path: string; name?: string; timestamp: string; firstMessage?: string }> }
-  | { type: 'session_history'; messages: Array<SessionHistoryMessage>; cwd?: string };
+  | { type: 'session_history'; messages: Array<SessionHistoryMessage>; cwd?: string }
+  | { type: 'resources_list'; commands: CommandInfo[]; skills: SkillInfo[]; templates: TemplateInfo[] }
+  | { type: 'command_completions'; items: CompletionItem[] }
+  | { type: 'extension_command_error'; command: string; error: string };
+
+export interface CommandInfo {
+  name: string;
+  description: string;
+  source: string;
+  hasCompletions: boolean;
+}
+
+export interface SkillInfo {
+  name: string;
+  description: string;
+}
+
+export interface TemplateInfo {
+  name: string;
+  description: string;
+  args: string[];
+}
+
+export interface CompletionItem {
+  value: string;
+  label: string;
+  description?: string;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -54,6 +83,10 @@ export function isClientCommand(value: unknown): value is ClientCommand {
       return typeof value.enabled === 'boolean';
     case 'extension_ui_response':
       return typeof value.id === 'string';
+    case 'list_resources':
+      return true;
+    case 'get_completions':
+      return typeof value.command === 'string' && typeof value.args === 'string';
     default:
       return false;
   }

@@ -56,4 +56,17 @@ describe('protocol messages', () => {
     expect(isClientCommand({ type: 'list_sessions' })).toBe(false); // missing cwd
     expect(isClientCommand({ type: 'list_sessions', cwd: 123 })).toBe(false); // cwd not string
   });
+
+  it('identifies list_resources command', () => {
+    expect(isClientCommand({ type: 'list_resources' })).toBe(true);
+  });
+
+  it('identifies get_completions command', () => {
+    expect(isClientCommand({ type: 'get_completions', command: 'persona', args: '' })).toBe(true);
+    expect(isClientCommand({ type: 'get_completions', command: 'persona', args: 'x' })).toBe(true);
+    expect(isClientCommand({ type: 'get_completions', command: '', args: '' })).toBe(true); // empty is valid
+    expect(isClientCommand({ type: 'get_completions', command: 'persona' })).toBe(false); // missing args
+    expect(isClientCommand({ type: 'get_completions', args: '' })).toBe(false); // missing command
+    expect(isClientCommand({ type: 'get_completions', command: 123, args: '' })).toBe(false); // command not string
+  });
 });

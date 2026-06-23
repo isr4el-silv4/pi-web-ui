@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import * as fs from 'node:fs';
-import { isClientCommand, type ClientCommand, type JsonObject, type JsonValue, type SessionHistoryMessage } from '../protocol/index.js';
+import { isClientCommand, type ClientCommand, type JsonObject, type JsonValue, type SessionHistoryMessage, type CommandInfo, type SkillInfo, type TemplateInfo, type CompletionItem } from '../protocol/index.js';
 import { createBrowserClientRegistry, type BrowserClientRegistry } from './browser-client.js';
 import { createBrowserToolExecutor } from './browser-tools.js';
 import { createSessionRegistry } from './session-registry.js';
@@ -8,10 +8,12 @@ import { parseStartContext, type BridgeStartContext } from './start-context.js';
 import { attachWebSocketServer } from './websocket-server.js';
 import { createDefaultPiSdkAdapter, createSdkSessionHost, resolveCwd, type SdkAdapter } from './sdk-session.js';
 import { createExtensionUiAdapter, type UiResponse } from './extension-ui-adapter.js';
+import { createWebUiContext } from './web-ui-context.js';
 
 export function createBridgeApp(options: { context: BridgeStartContext; pid?: number; sdkHost?: { create(options: { cwd: string; sessionPath?: string }): Promise<unknown> }; ui?: { respond(response: UiResponse): boolean } }) {
   const clients = createBrowserClientRegistry();
   const uiAdapter = createExtensionUiAdapter({ broadcast: (msg) => clients.broadcast(msg as JsonObject) });
+  const webUiContext = createWebUiContext({ broadcast: (msg) => clients.broadcast(msg) });
   const sessions = createSessionRegistry();
   sessions.createSession(options.context);
   let sdkSession: unknown;
@@ -79,6 +81,126 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     }
   }
 
+  async function bindSessionExtensions(session: unknown) {
+    if (!session || typeof (session as any).bindExtensions !== 'function') {
+      console.log('[Bridge] Skipping bindExtensions — session missing or no bindExtensions method');
+      return;
+    }
+    try {
+      console.log('[Bridge] Calling bindExtensions on session');
+      await (session as any).bindExtensions({
+        uiContext: webUiContext,
+        mode: 'rpc',
+        commandContextActions: {
+          waitForIdle: () => {
+            if (sdkSession && typeof (sdkSession as any).agent?.waitForIdle === 'function') {
+              return (sdkSession as any).agent.waitForIdle();
+            }
+            return Promise.resolve();
+          },
+          newSession: async (_options?: unknown) => {
+            // Defer to bridge command handler
+            return { cancelled: false };
+          },
+          switchSession: async (_sessionPath?: string, _options?: unknown) => {
+            // Defer to bridge command handler
+            return { cancelled: false };
+          },
+          fork: async (_entryId?: string, _options?: unknown) => {
+            return { cancelled: true };
+          },
+          navigateTree: async (_targetId?: string, _options?: unknown) => {
+            return { cancelled: true };
+          },
+          reload: async () => {
+            if (sdkSession && typeof (sdkSession as any).reload === 'function') {
+              await (sdkSession as any).reload();
+            }
+          },
+        },
+        onError: (err: any) => {
+          console.error('[Bridge] Extension error:', err?.extensionPath, err?.error);
+          clients.broadcast({ type: 'extension_ui_notify', message: `Extension error: ${err?.error || 'unknown'}` });
+        },
+      });
+      console.log('[Bridge] bindExtensions completed');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[Bridge] bindExtensions failed:', errorMessage);
+    }
+  }
+
+  function listResources() {
+    if (!sdkSession) return { commands: [], skills: [], templates: [] };
+    const commands: CommandInfo[] = [];
+    const skills: SkillInfo[] = [];
+    const templates: TemplateInfo[] = [];
+
+    try {
+      const runner = (sdkSession as any).extensionRunner;
+      if (runner?.getRegisteredCommands) {
+        for (const cmd of runner.getRegisteredCommands()) {
+          commands.push({
+            name: cmd.invocationName || cmd.name,
+            description: cmd.description || '',
+            source: cmd.sourceInfo?.path || 'extension',
+            hasCompletions: typeof cmd.getArgumentCompletions === 'function',
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[Bridge] Failed to list extension commands:', e);
+    }
+
+    try {
+      const loader = (sdkSession as any).resourceLoader;
+      if (loader?.getSkills) {
+        const skillList = loader.getSkills();
+        for (const skill of skillList.skills || []) {
+          skills.push({ name: skill.name, description: skill.description || '' });
+        }
+      }
+    } catch (e) {
+      console.warn('[Bridge] Failed to list skills:', e);
+    }
+
+    try {
+      const promptTemplates = (sdkSession as any).promptTemplates;
+      if (Array.isArray(promptTemplates)) {
+        for (const tmpl of promptTemplates) {
+          templates.push({
+            name: tmpl.name,
+            description: tmpl.description || '',
+            args: tmpl.args || [],
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[Bridge] Failed to list templates:', e);
+    }
+
+    return { commands, skills, templates };
+  }
+
+  async function getCompletions(commandName: string, argsPrefix: string): Promise<CompletionItem[]> {
+    if (!sdkSession) return [];
+    try {
+      const runner = (sdkSession as any).extensionRunner;
+      if (!runner?.getCommand) return [];
+      const cmd = runner.getCommand(commandName);
+      if (!cmd?.getArgumentCompletions) return [];
+      const results = await cmd.getArgumentCompletions(argsPrefix);
+      return (results || []).map((r: any) => ({
+        value: r.value || r.label || String(r),
+        label: r.label || r.value || String(r),
+        description: r.description || '',
+      }));
+    } catch (e) {
+      console.warn('[Bridge] Failed to get completions:', e);
+      return [];
+    }
+  }
+
   // Create browser tool executor for SDK integration
   const transport = {
     requestBrowserTool: async (tool: string, params: JsonObject) => {
@@ -107,6 +229,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     sdkSession = session; 
     console.log('[Bridge] SDK session created successfully, has prompt:', typeof (session as any)?.prompt);
     setupSdkSubscription(session);
+    void bindSessionExtensions(session);
   }).catch((error: unknown) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[Bridge] Failed to create SDK session:', error);
@@ -139,6 +262,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           ready = sdkHost.create({ cwd: resolvedCwd }).then((created) => { 
             sdkSession = created;
             setupSdkSubscription(created);
+            void bindSessionExtensions(created);
           }).catch((error: unknown) => {
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.error('Failed to create SDK session:', error);
@@ -173,6 +297,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           ready = sdkHost.create({ cwd: resolvedCwd, sessionPath: command.sessionPath }).then((created) => { 
             sdkSession = created;
             setupSdkSubscription(created);
+            void bindSessionExtensions(created);
           }).catch((error: unknown) => {
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.error('Failed to create SDK session:', error);
@@ -267,8 +392,25 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           return sessions.getCurrentSession();
         case 'extension_ui_response':
           const handledByUi = options.ui?.respond({ id: command.id, value: command.value });
+          const handledByWeb = webUiContext.respond({ id: command.id, value: command.value });
           const handledByAdapter = uiAdapter.respond({ id: command.id, value: command.value });
-          return { handled: handledByUi ?? handledByAdapter };
+          return { handled: handledByUi ?? handledByWeb ?? handledByAdapter };
+        case 'list_resources': {
+          const resources = listResources();
+          clients.broadcast({ type: 'resources_list', ...resources } as unknown as JsonObject);
+          return sessions.getCurrentSession();
+        }
+        case 'get_completions': {
+          getCompletions(command.command, command.args)
+            .then((items) => {
+              clients.broadcast({ type: 'command_completions', items } as unknown as JsonObject);
+            })
+            .catch((error: unknown) => {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              clients.broadcast({ type: 'extension_command_error', command: command.command, error: errorMessage } as JsonObject);
+            });
+          return sessions.getCurrentSession();
+        }
       }
     },
     async executeBrowserTool(tool: string, params: JsonObject): Promise<JsonValue | undefined> {
