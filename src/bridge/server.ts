@@ -637,7 +637,7 @@ export async function main() {
   // Wait for SDK session to be ready before accepting connections
   const app = (server as any)._app as ReturnType<typeof createBridgeApp>;
   await app.ready;
-  server.listen(context.port, '127.0.0.1');
+  server.listen(context.port, '0.0.0.0');
 }
 
 if (process.argv[1]?.endsWith('/bridge/server.js')) {
