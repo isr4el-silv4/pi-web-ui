@@ -1,6 +1,6 @@
 {
   "name": "@isr4el-silv4/pi-web-ui",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": false,
   "description": "Chrome side-panel UI and local bridge extension for Pi.",
   "license": "Apache-2.0",
