@@ -5,3 +5,4 @@ coverage/
 *.log
 .idea/
 plans/
+package-lock.json
