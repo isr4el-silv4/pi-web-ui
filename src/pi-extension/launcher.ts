@@ -41,7 +41,12 @@ export function createPiWebUiController(deps: {
         storageAccessEnabled: false,
         port: DEFAULT_BRIDGE_PORT,
       });
-      await chrome.open({ port: result.port });
+      // Best-effort Chrome open: bridge is already running even if browser launch fails.
+      try {
+        await chrome.open({ port: result.port });
+      } catch {
+        // Chrome not found — bridge is still running, user can open any browser manually.
+      }
       return result.alreadyRunning
         ? `Pi Web UI bridge already running on port ${result.port}.`
         : `Pi Web UI bridge started on port ${result.port}.`;

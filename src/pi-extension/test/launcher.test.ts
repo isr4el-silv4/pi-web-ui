@@ -69,4 +69,37 @@ describe('pi-web-ui controller', () => {
 
     await expect(controller.status()).resolves.toBe('Pi Web UI bridge is running on port 43117 (pid 1234).');
   });
+
+  it('starts the bridge successfully even when Chrome open fails', async () => {
+    const bridge = {
+      start: vi.fn(async () => ({ pid: 1234, port: 43117, alreadyRunning: false })),
+      stop: vi.fn(),
+      status: vi.fn(),
+      requestBrowserTool: vi.fn(),
+    };
+    const chrome = { open: vi.fn(async () => { throw new Error('Chrome browser not found'); }) };
+    const controller = createPiWebUiController({ bridge, chrome });
+
+    const result = await controller.start({ cwd: '/project' });
+
+    expect(bridge.start).toHaveBeenCalled();
+    expect(chrome.open).toHaveBeenCalledWith({ port: 43117 });
+    expect(result).toEqual('Pi Web UI bridge started on port 43117.');
+  });
+
+  it('starts the bridge successfully even when Chrome open fails (already running)', async () => {
+    const controller = createPiWebUiController({
+      bridge: {
+        start: vi.fn(async () => ({ pid: 1234, port: 43117, alreadyRunning: true })),
+        stop: vi.fn(),
+        status: vi.fn(),
+        requestBrowserTool: vi.fn(),
+      },
+      chrome: { open: vi.fn(async () => { throw new Error('Chrome browser not found'); }) },
+    });
+
+    const result = await controller.start({ cwd: '/project' });
+
+    expect(result).toEqual('Pi Web UI bridge already running on port 43117.');
+  });
 });
