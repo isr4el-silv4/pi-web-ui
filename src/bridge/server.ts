@@ -125,7 +125,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
       });
       console.log('[Bridge] bindExtensions completed');
       // Check if commands are now registered
-      const runner = (session as any).extensionRunner;
+      const runner = (session as any)._extensionRunner;
       if (runner?.getRegisteredCommands) {
         const cmds = runner.getRegisteredCommands();
         console.log('[Bridge] After bindExtensions: registered commands:', cmds?.length || 0);
@@ -153,8 +153,8 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     ];
 
     try {
-      const runner = (sdkSession as any).extensionRunner;
-      console.log('[Bridge] listResources: extensionRunner exists:', !!runner);
+      const runner = (sdkSession as any)._extensionRunner;
+      console.log('[Bridge] listResources: _extensionRunner exists:', !!runner);
       if (runner?.getRegisteredCommands) {
         const registered = runner.getRegisteredCommands();
         console.log('[Bridge] listResources: registered commands:', registered?.length || 0);
@@ -212,7 +212,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
   async function getCompletions(commandName: string, argsPrefix: string): Promise<CompletionItem[]> {
     if (!sdkSession) return [];
     try {
-      const runner = (sdkSession as any).extensionRunner;
+      const runner = (sdkSession as any)._extensionRunner;
       if (!runner?.getCommand) return [];
       const cmd = runner.getCommand(commandName);
       if (!cmd?.getArgumentCompletions) return [];

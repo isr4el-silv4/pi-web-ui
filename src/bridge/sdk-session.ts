@@ -163,6 +163,10 @@ export function createPiSdkAdapter({ sdk, browserToolExecutor }: { sdk: PiSdkMod
       const agentDir = typeof sdk.getAgentDir === 'function' ? sdk.getAgentDir() : undefined;
       console.log('[Bridge] agentDir:', agentDir);
       const resourceLoader = new sdk.DefaultResourceLoader({ cwd: resolvedCwd, agentDir });
+      // Must call reload() to actually discover extensions, skills, templates from disk.
+      // createAgentSession skips reload() when a resourceLoader is provided.
+      await (resourceLoader as any).reload();
+      console.log('[Bridge] resourceLoader.reload() done');
       const extensions = sdk.discoverAndLoadExtensions
         ? await sdk.discoverAndLoadExtensions([], resolvedCwd, agentDir)
         : [];

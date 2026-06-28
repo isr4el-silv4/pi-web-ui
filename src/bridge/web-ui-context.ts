@@ -124,9 +124,22 @@ export function createWebUiContext({ broadcast }: { broadcast: (message: JsonObj
       return undefined;
     },
     get theme() {
+      // No-op theme: returns plain text. The web UI uses CSS for styling,
+      // so ANSI color codes are not needed. Extensions call theme.fg/bg/bold etc.
+      const identity = (text: string) => text;
+      const fg = (_color: string, text: string) => text;
+      const bg = (_color: string, text: string) => text;
       return {
         name: 'default',
         colors: {},
+        fg,
+        bg,
+        bold: identity,
+        italic: identity,
+        underline: identity,
+        inverse: identity,
+        strikethrough: identity,
+        reset: identity,
       };
     },
     getAllThemes(): Array<{ name: string }> {
