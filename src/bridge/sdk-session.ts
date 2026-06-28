@@ -166,9 +166,11 @@ export function createPiSdkAdapter({ sdk, browserToolExecutor }: { sdk: PiSdkMod
       const extensions = sdk.discoverAndLoadExtensions
         ? await sdk.discoverAndLoadExtensions([], resolvedCwd, agentDir)
         : [];
+      console.log('[Bridge] discoverAndLoadExtensions found', (extensions as any[])?.length || 0, 'extensions');
       const skills = sdk.loadSkills
         ? await sdk.loadSkills({ cwd: resolvedCwd, agentDir, skillPaths: [] })
         : [];
+      console.log('[Bridge] loadSkills found', (skills as any[] ?? (skills as any)?.skills ?? [])?.length || 0, 'skills');
       // Initialize the global theme system before creating the agent session
       if (typeof sdk.initTheme === 'function') {
         sdk.initTheme();

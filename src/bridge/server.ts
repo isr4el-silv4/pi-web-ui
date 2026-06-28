@@ -124,6 +124,15 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
         },
       });
       console.log('[Bridge] bindExtensions completed');
+      // Check if commands are now registered
+      const runner = (session as any).extensionRunner;
+      if (runner?.getRegisteredCommands) {
+        const cmds = runner.getRegisteredCommands();
+        console.log('[Bridge] After bindExtensions: registered commands:', cmds?.length || 0);
+        for (const cmd of cmds) {
+          console.log('[Bridge]   -', cmd.invocationName || cmd.name, ':', cmd.description);
+        }
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('[Bridge] bindExtensions failed:', errorMessage);
@@ -136,10 +145,20 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     const skills: SkillInfo[] = [];
     const templates: TemplateInfo[] = [];
 
+    // Built-in commands (handled by SDK prompt(), not extension runner)
+    const builtInCommands: CommandInfo[] = [
+      { name: 'compact', description: 'Compact the conversation context', source: 'builtin', hasCompletions: false },
+      { name: 'model', description: 'Cycle to next available model', source: 'builtin', hasCompletions: false },
+      { name: 'thinking', description: 'Cycle thinking level', source: 'builtin', hasCompletions: false },
+    ];
+
     try {
       const runner = (sdkSession as any).extensionRunner;
+      console.log('[Bridge] listResources: extensionRunner exists:', !!runner);
       if (runner?.getRegisteredCommands) {
-        for (const cmd of runner.getRegisteredCommands()) {
+        const registered = runner.getRegisteredCommands();
+        console.log('[Bridge] listResources: registered commands:', registered?.length || 0);
+        for (const cmd of registered) {
           commands.push({
             name: cmd.invocationName || cmd.name,
             description: cmd.description || '',
@@ -152,10 +171,15 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
       console.warn('[Bridge] Failed to list extension commands:', e);
     }
 
+    // Prepend built-in commands
+    commands.unshift(...builtInCommands);
+
     try {
       const loader = (sdkSession as any).resourceLoader;
+      console.log('[Bridge] listResources: resourceLoader exists:', !!loader);
       if (loader?.getSkills) {
         const skillList = loader.getSkills();
+        console.log('[Bridge] listResources: skills:', skillList?.skills?.length || 0);
         for (const skill of skillList.skills || []) {
           skills.push({ name: skill.name, description: skill.description || '' });
         }
@@ -166,7 +190,9 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
 
     try {
       const promptTemplates = (sdkSession as any).promptTemplates;
+      console.log('[Bridge] listResources: promptTemplates exists:', !!promptTemplates, 'isArray:', Array.isArray(promptTemplates));
       if (Array.isArray(promptTemplates)) {
+        console.log('[Bridge] listResources: templates:', promptTemplates.length);
         for (const tmpl of promptTemplates) {
           templates.push({
             name: tmpl.name,
@@ -179,6 +205,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
       console.warn('[Bridge] Failed to list templates:', e);
     }
 
+    console.log('[Bridge] listResources: returning', commands.length, 'commands,', skills.length, 'skills,', templates.length, 'templates');
     return { commands, skills, templates };
   }
 
@@ -225,11 +252,11 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     };
   }
 
-  let ready = sdkHost.create({ cwd: options.context.cwd, sessionPath: options.context.sessionPath }).then((session) => { 
+  let ready = sdkHost.create({ cwd: options.context.cwd, sessionPath: options.context.sessionPath }).then(async (session) => { 
     sdkSession = session; 
     console.log('[Bridge] SDK session created successfully, has prompt:', typeof (session as any)?.prompt);
     setupSdkSubscription(session);
-    void bindSessionExtensions(session);
+    await bindSessionExtensions(session);
   }).catch((error: unknown) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[Bridge] Failed to create SDK session:', error);
@@ -396,8 +423,18 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           const handledByAdapter = uiAdapter.respond({ id: command.id, value: command.value });
           return { handled: handledByUi ?? handledByWeb ?? handledByAdapter };
         case 'list_resources': {
-          const resources = listResources();
-          clients.broadcast({ type: 'resources_list', ...resources } as unknown as JsonObject);
+          // If SDK session isn't ready yet, wait for it
+          if (!sdkSession) {
+            console.log('[Bridge] list_resources: SDK not ready, waiting...');
+            ready.then(() => {
+              console.log('[Bridge] list_resources: SDK ready, sending resources');
+              const resources = listResources();
+              clients.broadcast({ type: 'resources_list', ...resources } as unknown as JsonObject);
+            });
+          } else {
+            const resources = listResources();
+            clients.broadcast({ type: 'resources_list', ...resources } as unknown as JsonObject);
+          }
           return sessions.getCurrentSession();
         }
         case 'get_completions': {

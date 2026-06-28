@@ -57,7 +57,7 @@ pi-web-ui is the **server-side bridge** that connects three pieces:
 
 - **Node.js** ≥ 18 (ESM modules, `fetch` built-in)
 - **Pi Coding Agent** ([pi.dev](https://pi.dev))
-- **Chrome Extension** — [coming soon to the Chrome Web Store](https://chromewebstore.google.com/)
+- **Chrome Extension** — [Here](https://chromewebstore.google.com/detail/pi-coding-agent-web-ui/clhbmkkjcoknpbkicpfalmapgogeikhi?hl=en&authuser=0)
 - **Google Chrome** (or any Chromium-based browser)
 
 ---
@@ -65,14 +65,14 @@ pi-web-ui is the **server-side bridge** that connects three pieces:
 ## 📦 Installation
 
 ```bash
-npm install pi-web-ui
+pi install npm:@isr4el-silv4/pi-web-ui
 ```
 
 ### Chrome Extension Setup
 
-**From the Chrome Web Store:** Coming soon — [link TBD](https://chromewebstore.google.com/).
+**From the Chrome Web Store:** [Here](https://chromewebstore.google.com/detail/pi-coding-agent-web-ui/clhbmkkjcoknpbkicpfalmapgogeikhi?hl=en&authuser=0).
 
-**Manual (development):** Until the extension is published, load it from source:
+**Manual (development):** Load it from source:
 
 1. Clone the [Chrome extension repository](https://github.com/isr4el-silv4/pi-web-ui-chrome-extension).
 2. Open `chrome://extensions/`.
