@@ -163,7 +163,8 @@ describe('bridge process manager', () => {
   it('resolves bridge entry path correctly from src or dist', async () => {
     const { defaultBridgeEntryPath } = await import('../bridge-process.js');
     const path = defaultBridgeEntryPath();
-    expect(path).toContain('bridge/server.js');
+    // Accept both .js (built dist) and .ts (Pi dev, no build needed)
+    expect(path).toMatch(/bridge\/server\.(js|ts)$/);
   });
 
   it('fallback path should not contain src/dist pattern', async () => {
@@ -173,5 +174,61 @@ describe('bridge process manager', () => {
     const path = defaultBridgeEntryPath();
     // The path should never contain '/src/dist/' - that's a bug
     expect(path).not.toMatch(/src\/dist\//);
+  });
+
+  it('spawns with npx tsx when bridge entry is a .ts file', async () => {
+    const spawn = vi.fn(() => mockChild(888));
+    let probeCallCount = 0;
+    const manager = createBridgeProcessManager({
+      spawn,
+      statusProbe: vi.fn(async () => {
+        probeCallCount++;
+        if (probeCallCount === 1) return { running: false };
+        return { running: true, pid: 888, port: 43117 };
+      }),
+      bridgeEntryPath: '/ext/src/bridge/server.ts',
+    });
+
+    await manager.start({
+      cwd: '/project',
+      cookieAccessEnabled: false,
+      storageAccessEnabled: false,
+      port: 43117,
+    });
+
+    expect(spawn).toHaveBeenCalledWith('npx', ['tsx', '/ext/src/bridge/server.ts'], {
+      cwd: '/project',
+      detached: true,
+      env: expect.any(Object),
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+  });
+
+  it('spawns with node when bridge entry is a .js file', async () => {
+    const spawn = vi.fn(() => mockChild(999));
+    let probeCallCount = 0;
+    const manager = createBridgeProcessManager({
+      spawn,
+      statusProbe: vi.fn(async () => {
+        probeCallCount++;
+        if (probeCallCount === 1) return { running: false };
+        return { running: true, pid: 999, port: 43117 };
+      }),
+      bridgeEntryPath: '/ext/dist/bridge/server.js',
+    });
+
+    await manager.start({
+      cwd: '/project',
+      cookieAccessEnabled: false,
+      storageAccessEnabled: false,
+      port: 43117,
+    });
+
+    expect(spawn).toHaveBeenCalledWith(process.execPath, ['/ext/dist/bridge/server.js'], {
+      cwd: '/project',
+      detached: true,
+      env: expect.any(Object),
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
   });
 });

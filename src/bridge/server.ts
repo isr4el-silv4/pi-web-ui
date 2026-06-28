@@ -677,6 +677,6 @@ export async function main() {
   server.listen(context.port, '0.0.0.0');
 }
 
-if (process.argv[1]?.endsWith('/bridge/server.js')) {
+if (process.argv[1]?.endsWith('/bridge/server.js') || process.argv[1]?.endsWith('/bridge/server.ts')) {
   void main();
 }

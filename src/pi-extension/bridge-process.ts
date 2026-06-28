@@ -42,6 +42,9 @@ export function defaultBridgeEntryPath(): string {
   // When loaded from src/ (Pi dev): ../../dist/bridge/server.js → <project-root>/dist/bridge/server.js
   const srcFallback = resolve(here, '../../dist/bridge/server.js');
   if (existsSync(srcFallback)) return srcFallback;
+  // Fallback: run TypeScript source directly with tsx (Pi dev, no build needed)
+  const tsPath = resolve(here, '../bridge/server.ts');
+  if (existsSync(tsPath)) return tsPath;
   return distPath;
 }
 
@@ -90,7 +93,8 @@ export function createBridgeProcessManager(deps: {
       }
 
       const stderr: string[] = [];
-      const child = spawn(process.execPath, [bridgeEntryPath], {
+      const isTypeScript = bridgeEntryPath.endsWith('.ts');
+      const child = spawn(isTypeScript ? 'npx' : process.execPath, isTypeScript ? ['tsx', bridgeEntryPath] : [bridgeEntryPath], {
         cwd: options.cwd,
         detached: true,
         env: { ...process.env, PI_WEB_UI_START_CONTEXT: JSON.stringify(options) },
