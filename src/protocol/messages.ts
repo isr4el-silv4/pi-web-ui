@@ -10,7 +10,8 @@ export type ClientCommand =
   | { type: 'set_storage_access'; enabled: boolean }
   | { type: 'extension_ui_response'; id: string; value: unknown }
   | { type: 'list_resources' }
-  | { type: 'get_completions'; command: string; args: string };
+  | { type: 'get_completions'; command: string; args: string }
+  | { type: 'set_model'; provider: string; modelId: string };
 
 export type SessionHistoryMessage =
   | { role: 'user'; text: string; image?: { data: string; mimeType: string } }
@@ -34,7 +35,11 @@ export type ServerEvent =
   | { type: 'session_history'; messages: Array<SessionHistoryMessage>; cwd?: string }
   | { type: 'resources_list'; commands: CommandInfo[]; skills: SkillInfo[]; templates: TemplateInfo[] }
   | { type: 'command_completions'; items: CompletionItem[] }
-  | { type: 'extension_command_error'; command: string; error: string };
+  | { type: 'extension_command_error'; command: string; error: string }
+  | { type: 'model_changed'; provider: string; modelId: string; modelName?: string }
+  | { type: 'thinking_changed'; level: string }
+  | { type: 'compaction_done'; summary?: string; tokensBefore?: number }
+  | { type: 'model_list'; models: Array<{ provider: string; id: string; name: string }>; currentProvider?: string; currentModelId?: string };
 
 export interface CommandInfo {
   name: string;
@@ -87,6 +92,8 @@ export function isClientCommand(value: unknown): value is ClientCommand {
       return true;
     case 'get_completions':
       return typeof value.command === 'string' && typeof value.args === 'string';
+    case 'set_model':
+      return typeof value.provider === 'string' && typeof value.modelId === 'string';
     default:
       return false;
   }

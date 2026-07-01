@@ -12,7 +12,7 @@ describe('bridge app sdk session integration', () => {
     await app.ready;
     expect(sdkHost.create).toHaveBeenCalledWith({ cwd: '/project', sessionPath: undefined });
 
-    app.handleClientCommand({ type: 'resume_session', sessionPath: '/s.jsonl' });
+    await app.handleClientCommand({ type: 'resume_session', sessionPath: '/s.jsonl' });
     await app.ready;
     expect(sdkHost.create).toHaveBeenLastCalledWith({ cwd: '/project', sessionPath: '/s.jsonl' });
   });
@@ -35,7 +35,7 @@ describe('bridge app sdk session integration', () => {
     await app.ready;
 
     // list_sessions should return the cwd even if SDK list fails
-    const result = app.handleClientCommand({ type: 'list_sessions', cwd: '/project' });
+    const result = await app.handleClientCommand({ type: 'list_sessions', cwd: '/project' });
     expect(result).toMatchObject({ cwd: '/project' });
 
     // session_error may be broadcast if listAll fails (no SDK in test env)
@@ -63,7 +63,7 @@ describe('bridge app sdk session integration', () => {
     sdkHost.create.mockClear();
     events.length = 0;
 
-    app.handleClientCommand({ type: 'resume_session', sessionPath: '/project/.pi/sessions/test.jsonl' });
+    await app.handleClientCommand({ type: 'resume_session', sessionPath: '/project/.pi/sessions/test.jsonl' });
     await app.ready;
 
     // SDK should be created with sessionPath

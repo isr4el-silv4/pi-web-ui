@@ -53,7 +53,7 @@ describe('bridge SDK session integration', () => {
     await app.ready;
 
     // Send a prompt
-    app.handleClientCommand({ type: 'prompt', message: 'Test prompt' });
+    await app.handleClientCommand({ type: 'prompt', message: 'Test prompt' });
 
     // Give it a moment to process
     await new Promise((resolve) => setTimeout(resolve, 50));
@@ -95,12 +95,12 @@ describe('bridge SDK session integration', () => {
     // Verify browser client count increased
     expect(app.status().browserClients).toBe(1);
 
-    // Collect messages
+    // Collect messages until we get session_state
     const messages: Record<string, unknown>[] = [];
     const messagePromise = new Promise<Record<string, unknown>[]>((resolve) => {
       const handler = (data: Buffer) => {
         messages.push(JSON.parse(data.toString()) as Record<string, unknown>);
-        if (messages.length >= 2) {
+        if (messages.some((m) => m.type === 'session_state')) {
           ws.removeListener('message', handler);
           resolve(messages);
         }
@@ -111,9 +111,8 @@ describe('bridge SDK session integration', () => {
     ws.send(JSON.stringify({ type: 'prompt', message: 'WebSocket test' }));
     const received = await messagePromise;
 
-    expect(received).toHaveLength(2);
-    expect(received[0]).toMatchObject({ type: 'prompt_received', message: 'WebSocket test' });
-    expect(received[1]).toMatchObject({ type: 'session_state' });
+    expect(received.some((m) => m.type === 'prompt_received' && m.message === 'WebSocket test')).toBe(true);
+    expect(received.some((m) => m.type === 'session_state')).toBe(true);
     expect(promptCalls).toEqual([{ text: 'WebSocket test' }]);
   });
 

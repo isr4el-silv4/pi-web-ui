@@ -20,14 +20,14 @@ describe('bridge app', () => {
     });
   });
 
-  it('handles side panel commands by updating session state', () => {
+  it('handles side panel commands by updating session state', async () => {
     const app = createBridgeApp({
       context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
       pid: 999,
     });
 
-    expect(app.handleClientCommand({ type: 'set_cookie_access', enabled: true })).toMatchObject({ cookieAccessEnabled: true });
-    expect(app.handleClientCommand({ type: 'new_session', cwd: '/other' })).toMatchObject({ cwd: '/other' });
+    expect(await app.handleClientCommand({ type: 'set_cookie_access', enabled: true })).toMatchObject({ cookieAccessEnabled: true });
+    expect(await app.handleClientCommand({ type: 'new_session', cwd: '/other' })).toMatchObject({ cwd: '/other' });
   });
 });
 
@@ -40,7 +40,7 @@ describe('resume_session uses session cwd', () => {
     sessionFilePath = path.join(tmpDir, 'session.jsonl');
   });
 
-  it('uses cwd from session file header instead of context cwd', () => {
+  it('uses cwd from session file header instead of context cwd', async () => {
     // Create a session file with a different cwd than the context
     const sessionCwd = path.join(tmpDir, 'session-project');
     fs.mkdirSync(sessionCwd, { recursive: true });
@@ -69,7 +69,7 @@ describe('resume_session uses session cwd', () => {
     });
 
     // Resume the session
-    const session = app.handleClientCommand({ type: 'resume_session', sessionPath: sessionFilePath });
+    const session = await app.handleClientCommand({ type: 'resume_session', sessionPath: sessionFilePath });
 
     // The session should use the session file's cwd, not the context cwd
     expect(session).toMatchObject({ cwd: sessionCwd });
@@ -81,7 +81,7 @@ describe('resume_session uses session cwd', () => {
     );
   });
 
-  it('falls back to context cwd when session file has no cwd', () => {
+  it('falls back to context cwd when session file has no cwd', async () => {
     // Create a session file without cwd in header (old format)
     const header = JSON.stringify({ 
       type: 'session', 
@@ -106,7 +106,7 @@ describe('resume_session uses session cwd', () => {
     });
 
     // Resume the session
-    const session = app.handleClientCommand({ type: 'resume_session', sessionPath: sessionFilePath });
+    const session = await app.handleClientCommand({ type: 'resume_session', sessionPath: sessionFilePath });
 
     // Should fall back to context cwd
     expect(session).toMatchObject({ cwd: contextCwd });
@@ -117,7 +117,7 @@ describe('resume_session uses session cwd', () => {
     );
   });
 
-  it('falls back to context cwd when session file does not exist', () => {
+  it('falls back to context cwd when session file does not exist', async () => {
     const contextCwd = path.join(tmpDir, 'context-project');
     fs.mkdirSync(contextCwd, { recursive: true });
 
@@ -131,7 +131,7 @@ describe('resume_session uses session cwd', () => {
     });
 
     // Resume a non-existent session
-    const session = app.handleClientCommand({ type: 'resume_session', sessionPath: '/nonexistent/session.jsonl' });
+    const session = await app.handleClientCommand({ type: 'resume_session', sessionPath: '/nonexistent/session.jsonl' });
 
     // Should fall back to context cwd
     expect(session).toMatchObject({ cwd: contextCwd });
@@ -170,7 +170,7 @@ describe('resume_session uses session cwd', () => {
     });
 
     // Resume the session
-    app.handleClientCommand({ type: 'resume_session', sessionPath: sessionFilePath });
+    await app.handleClientCommand({ type: 'resume_session', sessionPath: sessionFilePath });
 
     // Wait for async buildSessionHistory to complete
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -183,7 +183,7 @@ describe('resume_session uses session cwd', () => {
 });
 
 describe('bridge app abort', () => {
-  it('broadcasts abort_received when abort command is received', () => {
+  it('broadcasts abort_received when abort command is received', async () => {
     const events: unknown[] = [];
     const sdkHost = {
       create: vi.fn(async () => ({ prompt: vi.fn(), subscribe: vi.fn() })),
@@ -200,7 +200,7 @@ describe('bridge app abort', () => {
       return originalBroadcast(event);
     });
 
-    app.handleClientCommand({ type: 'abort' });
+    await app.handleClientCommand({ type: 'abort' });
 
     expect(events).toContainEqual({ type: 'abort_received' });
   });
@@ -218,7 +218,7 @@ describe('bridge app abort', () => {
 
     await app.ready;
 
-    app.handleClientCommand({ type: 'abort' });
+    await app.handleClientCommand({ type: 'abort' });
 
     // Abort is called synchronously — no timeout needed
     expect(abortFn).toHaveBeenCalledTimes(1);
@@ -237,7 +237,7 @@ describe('bridge app abort', () => {
     await app.ready;
 
     // Should not throw
-    expect(() => app.handleClientCommand({ type: 'abort' })).not.toThrow();
+    expect(await app.handleClientCommand({ type: 'abort' })).toBeDefined();
   });
 
   it('broadcasts bridge_error when sdkSession.abort() fails', async () => {
@@ -259,7 +259,7 @@ describe('bridge app abort', () => {
       events.push(event);
     });
 
-    app.handleClientCommand({ type: 'abort' });
+    await app.handleClientCommand({ type: 'abort' });
 
     // Wait for ready.then() + abort().catch() chain to complete
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -269,7 +269,7 @@ describe('bridge app abort', () => {
     expect((errorEvent as any).error).toContain('Abort failed:');
   });
 
-  it('still broadcasts abort_received even when SDK session is not ready', () => {
+  it('still broadcasts abort_received even when SDK session is not ready', async () => {
     const events: unknown[] = [];
     const sdkHost = {
       create: vi.fn(async () => ({ prompt: vi.fn(), subscribe: vi.fn(), abort: vi.fn() })),
@@ -287,7 +287,7 @@ describe('bridge app abort', () => {
     });
 
     // Don't wait for ready — send abort immediately
-    app.handleClientCommand({ type: 'abort' });
+    await app.handleClientCommand({ type: 'abort' });
 
     // abort_received should be broadcast immediately
     expect(events).toContainEqual({ type: 'abort_received' });
@@ -363,7 +363,7 @@ describe('bridge app abort', () => {
     });
 
     // User clicks abort
-    app.handleClientCommand({ type: 'abort' });
+    await app.handleClientCommand({ type: 'abort' });
 
     // Model finishes normally (stopReason: "end_turn") — should still be suppressed
     subscribeCallback?.({
@@ -406,10 +406,10 @@ describe('bridge app abort', () => {
     });
 
     // User aborts
-    app.handleClientCommand({ type: 'abort' });
+    await app.handleClientCommand({ type: 'abort' });
 
     // Then sends a new prompt (which resets the abort flag)
-    app.handleClientCommand({ type: 'prompt', message: 'New question' });
+    await app.handleClientCommand({ type: 'prompt', message: 'New question' });
 
     // Now the response should be allowed through
     subscribeCallback?.({

@@ -17,6 +17,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
   const sessions = createSessionRegistry();
   sessions.createSession(options.context);
   let sdkSession: unknown;
+  let cachedModels: Array<{ provider: string; id: string; name: string }> = [];
   let unsubscribeSdk: (() => void) | undefined;
   // Track whether the user requested an abort — suppress any message_end arriving after
   let aborted = false;
@@ -145,10 +146,10 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     const skills: SkillInfo[] = [];
     const templates: TemplateInfo[] = [];
 
-    // Built-in commands (handled by SDK prompt(), not extension runner)
+    // Built-in commands (handled by bridge, not extension runner)
     const builtInCommands: CommandInfo[] = [
       { name: 'compact', description: 'Compact the conversation context', source: 'builtin', hasCompletions: false },
-      { name: 'model', description: 'Cycle to next available model', source: 'builtin', hasCompletions: false },
+      { name: 'model', description: 'Select model from available models', source: 'builtin', hasCompletions: false },
       { name: 'thinking', description: 'Cycle thinking level', source: 'builtin', hasCompletions: false },
     ];
 
@@ -228,6 +229,206 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     }
   }
 
+  /**
+   * Handle built-in slash commands (/model, /compact, /thinking) directly in the bridge.
+   * These commands are NOT registered as extension commands in the SDK — they are handled
+   * at the interactive-mode level in the TUI. For the web UI, we handle them here.
+   * 
+   * Returns synchronously (true/false) while spawning the actual work as fire-and-forget.
+   * This is critical: the caller (handleClientCommand) must return immediately so that
+   * session_state is broadcast to the websocket client. If we awaited the async work,
+   * the client would never receive session_state until the user responded to the UI.
+   * 
+   * @returns true if the command was handled, false if it should be forwarded to the SDK as a normal prompt
+   */
+  function handleSlashCommand(
+    message: string,
+    session: unknown,
+    readyPromise: Promise<unknown>,
+    broadcastClients: { broadcast: (msg: unknown) => void },
+    uiContext: { select: (title: string, options: string[]) => Promise<string | undefined> }
+  ): boolean {
+    if (!message.startsWith('/')) return false;
+    
+    const spaceIndex = message.indexOf(' ');
+    const commandName = spaceIndex === -1 ? message.slice(1) : message.slice(1, spaceIndex);
+    
+    if (commandName === 'model' || commandName === 'compact' || commandName === 'thinking') {
+      // Spawn the actual command work as fire-and-forget
+      void executeSlashCommand(commandName, session, readyPromise, broadcastClients, uiContext);
+      return true;
+    }
+    
+    return false; // Not a built-in slash command, forward to SDK
+  }
+
+  /** Execute the actual slash command work (fire-and-forget). */
+  async function executeSlashCommand(
+    commandName: string,
+    session: unknown,
+    readyPromise: Promise<unknown>,
+    broadcastClients: { broadcast: (msg: unknown) => void },
+    uiContext: { select: (title: string, options: string[]) => Promise<string | undefined> }
+  ) {
+    // Wait for SDK session to be ready if not yet available
+    if (!session) {
+      try {
+        await readyPromise;
+      } catch (e) {
+        broadcastClients.broadcast({ type: 'bridge_error', error: 'SDK session not ready' });
+        return;
+      }
+    }
+    
+    if (!session) {
+      broadcastClients.broadcast({ type: 'bridge_error', error: 'SDK session not available' });
+      return;
+    }
+
+    switch (commandName) {
+      case 'model':
+        await handleSlashModel(session, broadcastClients);
+        break;
+      case 'compact':
+        await handleSlashCompact(session, broadcastClients);
+        break;
+      case 'thinking':
+        await handleSlashThinking(session, broadcastClients);
+        break;
+    }
+  }
+
+  /** Fetch and broadcast the model list to all clients. */
+  async function broadcastModelList(session: unknown) {
+    if (!session) return;
+    try {
+      const modelRegistry = (session as any).modelRegistry;
+      if (!modelRegistry) return;
+
+      if (typeof modelRegistry.refresh === 'function') {
+        modelRegistry.refresh();
+      }
+      
+      const availableModels = typeof modelRegistry.getAvailable === 'function'
+        ? await modelRegistry.getAvailable()
+        : [];
+      
+      if (!availableModels || availableModels.length === 0) return;
+
+      // Cache the model objects so set_model can use the same instances
+      cachedModels = availableModels.map((m: any) => ({
+        provider: m.provider,
+        id: m.id,
+        name: m.name || m.id,
+        _ref: m, // Keep a reference to the actual model object
+      }));
+
+      const currentModel = (session as any).model;
+
+      clients.broadcast({
+        type: 'model_list',
+        models: cachedModels,
+        currentProvider: currentModel?.provider,
+        currentModelId: currentModel?.id,
+      } as unknown as import('../protocol/index.js').JsonObject);
+    } catch (error) {
+      console.warn('[Bridge] Failed to broadcast model list:', error);
+    }
+  }
+
+  async function handleSlashModel(
+    session: unknown,
+    broadcastClients: { broadcast: (msg: unknown) => void }
+  ) {
+    try {
+      const modelRegistry = (session as any).modelRegistry;
+      if (!modelRegistry) {
+        broadcastClients.broadcast({ type: 'bridge_error', error: 'No model registry available' });
+        return;
+      }
+
+      // Refresh and get available models
+      if (typeof modelRegistry.refresh === 'function') {
+        modelRegistry.refresh();
+      }
+      
+      const availableModels = typeof modelRegistry.getAvailable === 'function'
+        ? await modelRegistry.getAvailable()
+        : [];
+      
+      if (!availableModels || availableModels.length === 0) {
+        broadcastClients.broadcast({ type: 'extension_ui_notify', message: 'No models available. Configure API keys first.' });
+        return;
+      }
+
+      // Get current model
+      const currentModel = (session as any).model;
+
+      // Send model list as a dedicated event (not via extension_ui_request)
+      // so the chrome extension can render a persistent selector
+      broadcastClients.broadcast({
+        type: 'model_list',
+        models: availableModels.map((m: any) => ({
+          provider: m.provider,
+          id: m.id,
+          name: m.name || m.id,
+        })),
+        currentProvider: currentModel?.provider,
+        currentModelId: currentModel?.id,
+      } as unknown as import('../protocol/index.js').JsonObject);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[Bridge] /model command failed:', error);
+      broadcastClients.broadcast({ type: 'bridge_error', error: `Model selection failed: ${errorMessage}` });
+    }
+  }
+
+  async function handleSlashCompact(
+    session: unknown,
+    broadcastClients: { broadcast: (msg: unknown) => void }
+  ): Promise<boolean> {
+    try {
+      if (typeof (session as any).compact !== 'function') {
+        broadcastClients.broadcast({ type: 'bridge_error', error: 'Session does not support compact' });
+        return true;
+      }
+
+      broadcastClients.broadcast({ type: 'extension_ui_notify', message: 'Compacting conversation context...' });
+      await (session as any).compact();
+      broadcastClients.broadcast({ type: 'compaction_done' });
+      broadcastClients.broadcast({ type: 'extension_ui_notify', message: 'Context compacted successfully' });
+      return true;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[Bridge] /compact command failed:', error);
+      broadcastClients.broadcast({ type: 'bridge_error', error: `Compaction failed: ${errorMessage}` });
+      return true;
+    }
+  }
+
+  async function handleSlashThinking(
+    session: unknown,
+    broadcastClients: { broadcast: (msg: unknown) => void }
+  ): Promise<boolean> {
+    try {
+      if (typeof (session as any).cycleThinkingLevel !== 'function') {
+        broadcastClients.broadcast({ type: 'bridge_error', error: 'Session does not support cycleThinkingLevel' });
+        return true;
+      }
+
+      const result = await (session as any).cycleThinkingLevel();
+      const newLevel = result?.thinkingLevel || (session as any).thinkingLevel || 'unknown';
+      broadcastClients.broadcast({ type: 'thinking_changed', level: newLevel });
+      broadcastClients.broadcast({ type: 'extension_ui_notify', message: `Thinking level changed to: ${newLevel}` });
+      return true;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[Bridge] /thinking command failed:', error);
+      broadcastClients.broadcast({ type: 'bridge_error', error: `Thinking level change failed: ${errorMessage}` });
+      return true;
+    }
+  }
+
   // Create browser tool executor for SDK integration
   const transport = {
     requestBrowserTool: async (tool: string, params: JsonObject) => {
@@ -257,6 +458,8 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     console.log('[Bridge] SDK session created successfully, has prompt:', typeof (session as any)?.prompt);
     setupSdkSubscription(session);
     await bindSessionExtensions(session);
+    // Broadcast available models to all connected clients
+    void broadcastModelList(session);
   }).catch((error: unknown) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error('[Bridge] Failed to create SDK session:', error);
@@ -278,7 +481,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
         sdkSession,
       };
     },
-    handleClientCommand(command: ClientCommand) {
+    async handleClientCommand(command: ClientCommand) {
       switch (command.type) {
         case 'new_session': {
           aborted = false;
@@ -286,10 +489,11 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           const session = sessions.createSession({ cwd: resolvedCwd });
           // Clear chat history for the new session
           clients.broadcast({ type: 'session_history', messages: [], cwd: resolvedCwd });
-          ready = sdkHost.create({ cwd: resolvedCwd }).then((created) => { 
+          ready = sdkHost.create({ cwd: resolvedCwd }).then(async (created) => { 
             sdkSession = created;
             setupSdkSubscription(created);
-            void bindSessionExtensions(created);
+            await bindSessionExtensions(created);
+            void broadcastModelList(created);
           }).catch((error: unknown) => {
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.error('Failed to create SDK session:', error);
@@ -321,10 +525,11 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           const session = sessions.resumeSession(command.sessionPath, { cwd: resolvedCwd });
 
           // 4. Create SDK session with the session's own cwd so it operates in the correct directory
-          ready = sdkHost.create({ cwd: resolvedCwd, sessionPath: command.sessionPath }).then((created) => { 
+          ready = sdkHost.create({ cwd: resolvedCwd, sessionPath: command.sessionPath }).then(async (created) => { 
             sdkSession = created;
             setupSdkSubscription(created);
-            void bindSessionExtensions(created);
+            await bindSessionExtensions(created);
+            void broadcastModelList(created);
           }).catch((error: unknown) => {
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.error('Failed to create SDK session:', error);
@@ -353,6 +558,15 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           // Reset abort flag so the new prompt's response is allowed through
           aborted = false;
           console.log('[Bridge] Prompt received, sdkSession exists:', !!sdkSession, 'has prompt method:', typeof (sdkSession as any)?.prompt);
+          
+          // Check for built-in slash commands and handle them directly (fire-and-forget)
+          const slashHandled = handleSlashCommand(command.message, sdkSession, ready, clients, webUiContext);
+          if (slashHandled) {
+            clients.broadcast({ type: 'prompt_received', message: command.message });
+            clients.broadcast({ type: 'prompt_sent', message: command.message });
+            return sessions.getCurrentSession();
+          }
+          
           // Queue prompt if SDK session isn't ready yet — retry once it becomes available
           if (!sdkSession) {
             console.log('[Bridge] SDK not ready, queuing prompt');
@@ -446,6 +660,52 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
               const errorMessage = error instanceof Error ? error.message : String(error);
               clients.broadcast({ type: 'extension_command_error', command: command.command, error: errorMessage } as JsonObject);
             });
+          return sessions.getCurrentSession();
+        }
+        case 'set_model': {
+          // Set model directly on the SDK session
+          if (!sdkSession) {
+            clients.broadcast({ type: 'bridge_error', error: 'SDK session not ready' });
+            return sessions.getCurrentSession();
+          }
+          // Use the cached model list (same objects sent to the extension)
+          let model = cachedModels.find((m) =>
+            m.provider === command.provider && (m.id === command.modelId || m.name === command.modelId)
+          );
+          // Fallback: if not in cache, fetch from registry
+          if (!model) {
+            const modelRegistry = (sdkSession as any).modelRegistry;
+            if (modelRegistry && typeof modelRegistry.getAvailable === 'function') {
+              const availableModels = await modelRegistry.getAvailable();
+              const found = availableModels.find((m: any) =>
+                m.provider === command.provider && (m.id === command.modelId || m.name === command.modelId)
+              );
+              if (found) {
+                model = { provider: found.provider, id: found.id, name: found.name || found.id, _ref: found };
+                cachedModels.push(model);
+              }
+            }
+          }
+          if (!model) {
+            clients.broadcast({ type: 'bridge_error', error: `Model not found: ${command.provider}/${command.modelId}` });
+            return sessions.getCurrentSession();
+          }
+          // Set the model using the cached reference
+          if (typeof (sdkSession as any).setModel === 'function') {
+            (sdkSession as any).setModel(model._ref).then(() => {
+              clients.broadcast({
+                type: 'model_changed',
+                provider: model.provider,
+                modelId: model.id,
+                modelName: model.name || model.id,
+              } as unknown as JsonObject);
+            }).catch((error: unknown) => {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              clients.broadcast({ type: 'bridge_error', error: `Failed to set model: ${errorMessage}` });
+            });
+          } else {
+            clients.broadcast({ type: 'bridge_error', error: 'Session does not support setModel' });
+          }
           return sessions.getCurrentSession();
         }
       }
@@ -648,7 +908,7 @@ export function createHttpServer(context: BridgeStartContext) {
     if (request.method === 'POST' && request.url === '/command') {
       const parsed = JSON.parse(await readBody(request)) as unknown;
       if (!isClientCommand(parsed)) return sendJson(response, 400, { error: 'Invalid client command' });
-      return sendJson(response, 200, app.handleClientCommand(parsed));
+      return sendJson(response, 200, await app.handleClientCommand(parsed));
     }
     if (request.method === 'POST' && request.url === '/browser-tool') {
       const { tool, params } = JSON.parse(await readBody(request)) as { tool?: string; params?: JsonObject };

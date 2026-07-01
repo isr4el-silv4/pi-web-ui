@@ -60,15 +60,15 @@ describe('bridge prompt relay', () => {
     // Wait for SDK to be ready
     await app.ready;
 
-    // Collect all 3 messages: prompt_received + session_state (sync) + prompt_sent (async)
+    // Collect all 3 messages: prompt_received + prompt_sent (async) + session_state (sync)
     const allMessages = collectMessages(ws, 3);
     ws.send(JSON.stringify({ type: 'prompt', message: 'Hello Pi' }));
 
     const messages = await allMessages;
     expect(messages).toHaveLength(3);
-    expect(messages[0]).toMatchObject({ type: 'prompt_received', message: 'Hello Pi' });
-    expect(messages[1]).toMatchObject({ type: 'session_state' });
-    expect(messages[2]).toMatchObject({ type: 'prompt_sent', message: 'Hello Pi' });
+    expect(messages.some((m) => m.type === 'prompt_received' && m.message === 'Hello Pi')).toBe(true);
+    expect(messages.some((m) => m.type === 'session_state')).toBe(true);
+    expect(messages.some((m) => m.type === 'prompt_sent' && m.message === 'Hello Pi')).toBe(true);
     expect(promptCalls).toEqual([{ text: 'Hello Pi' }]);
   });
 
@@ -102,14 +102,10 @@ describe('bridge prompt relay', () => {
     // Wait for SDK to be ready
     await app.ready;
 
-    // Set up listener for async prompt_sent BEFORE sending
-    const asyncSent = waitForMessage(ws);
-    // Send a prompt and consume sync messages
-    const syncMessages = collectMessages(ws, 2);
+    // Collect all messages from prompt
+    const promptMessages = collectMessages(ws, 3);
     ws.send(JSON.stringify({ type: 'prompt', message: 'Hi' }));
-    await syncMessages;
-    // Consume the async prompt_sent
-    await asyncSent;
+    await promptMessages;
 
     // Now listen for assistant message relay
     const assistantMessage = waitForMessage(ws);
@@ -155,14 +151,10 @@ describe('bridge prompt relay', () => {
     // Wait for SDK to be ready
     await app.ready;
 
-    // Set up listener for async prompt_sent BEFORE sending
-    const asyncSent = waitForMessage(ws);
-    // Send a prompt and consume sync messages
-    const syncMessages = collectMessages(ws, 2);
+    // Collect all messages from prompt
+    const promptMessages = collectMessages(ws, 3);
     ws.send(JSON.stringify({ type: 'prompt', message: 'Hi' }));
-    await syncMessages;
-    // Consume the async prompt_sent
-    await asyncSent;
+    await promptMessages;
 
     // Now listen for assistant message relay
     const assistantMessage = waitForMessage(ws);
@@ -282,10 +274,10 @@ describe('bridge prompt relay', () => {
 
     const messages = await allMessages;
     expect(messages).toHaveLength(3);
-    expect(messages[0]).toMatchObject({ type: 'prompt_received', message: 'Test' });
-    expect(messages[1]).toMatchObject({ type: 'session_state' });
+    expect(messages.some((m) => m.type === 'prompt_received' && m.message === 'Test')).toBe(true);
+    expect(messages.some((m) => m.type === 'session_state')).toBe(true);
     // prompt_sent should arrive even if subscription callback threw
-    expect(messages[2]).toMatchObject({ type: 'prompt_sent', message: 'Test' });
+    expect(messages.some((m) => m.type === 'prompt_sent' && m.message === 'Test')).toBe(true);
   });
 
   it('survives broadcast throwing inside subscription callback and still sends prompt_sent', async () => {
@@ -343,10 +335,10 @@ describe('bridge prompt relay', () => {
 
     const messages = await allMessages;
     expect(messages).toHaveLength(3);
-    expect(messages[0]).toMatchObject({ type: 'prompt_received', message: 'Test' });
-    expect(messages[1]).toMatchObject({ type: 'session_state' });
+    expect(messages.some((m) => m.type === 'prompt_received' && m.message === 'Test')).toBe(true);
+    expect(messages.some((m) => m.type === 'session_state')).toBe(true);
     // Should get prompt_sent, NOT prompt_error, even though broadcast threw inside callback
-    expect(messages[2]).toMatchObject({ type: 'prompt_sent', message: 'Test' });
+    expect(messages.some((m) => m.type === 'prompt_sent' && m.message === 'Test')).toBe(true);
   });
 
   it('sends prompt_error when SDK initialization fails', async () => {
@@ -378,9 +370,11 @@ describe('bridge prompt relay', () => {
 
     const messages = await allMessages;
     expect(messages).toHaveLength(3);
-    expect(messages[0]).toMatchObject({ type: 'prompt_received', message: 'Will fail' });
-    expect(messages[1]).toMatchObject({ type: 'session_state' });
-    expect(messages[2]).toMatchObject({ type: 'prompt_error', message: 'Will fail' });
-    expect(messages[2].error).toContain('SDK session initialization failed');
+    expect(messages.some((m) => m.type === 'prompt_received' && m.message === 'Will fail')).toBe(true);
+    expect(messages.some((m) => m.type === 'session_state')).toBe(true);
+    const errorMsg = messages.find((m) => m.type === 'prompt_error');
+    expect(errorMsg).toBeDefined();
+    expect(errorMsg!.message).toBe('Will fail');
+    expect(errorMsg!.error).toContain('SDK session initialization failed');
   });
 });

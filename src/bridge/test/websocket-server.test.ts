@@ -34,12 +34,23 @@ describe('bridge websocket server', () => {
     servers.push(ws);
     await new Promise<void>((resolve) => ws.once('open', resolve));
 
-    const message = new Promise<Record<string, unknown>>((resolve) => {
-      ws.once('message', (data) => resolve(JSON.parse(data.toString()) as Record<string, unknown>));
+    // Collect messages until we get session_state
+    const messages: Record<string, unknown>[] = [];
+    const messagePromise = new Promise<Record<string, unknown>[]>((resolve) => {
+      const handler = (data: Buffer) => {
+        messages.push(JSON.parse(data.toString()) as Record<string, unknown>);
+        if (messages.some((m) => m.type === 'session_state')) {
+          ws.removeListener('message', handler);
+          resolve(messages);
+        }
+      };
+      ws.on('message', handler);
     });
     ws.send(JSON.stringify({ type: 'set_cookie_access', enabled: true }));
 
-    await expect(message).resolves.toMatchObject({ type: 'session_state', session: { cookieAccessEnabled: true } });
+    const result = await messagePromise;
+    const sessionState = result.find((m) => m.type === 'session_state');
+    expect(sessionState).toMatchObject({ type: 'session_state', session: { cookieAccessEnabled: true } });
   }, 10000);
 
   it('sends error response for invalid JSON', async () => {
@@ -109,12 +120,12 @@ describe('bridge websocket server', () => {
     // Wait for SDK to be ready
     await app.ready;
 
-    // Collect messages
+    // Collect messages until we get session_state
     const messages: Record<string, unknown>[] = [];
     const messagePromise = new Promise<Record<string, unknown>[]>((resolve) => {
       const handler = (data: Buffer) => {
         messages.push(JSON.parse(data.toString()) as Record<string, unknown>);
-        if (messages.length >= 2) {
+        if (messages.some((m) => m.type === 'session_state')) {
           ws.removeListener('message', handler);
           resolve(messages);
         }
@@ -125,9 +136,8 @@ describe('bridge websocket server', () => {
     ws.send(JSON.stringify({ type: 'prompt', message: 'Hello Pi' }));
 
     const result = await messagePromise;
-    expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({ type: 'prompt_received', message: 'Hello Pi' });
-    expect(result[1]).toMatchObject({ type: 'session_state' });
+    expect(result.some((m) => m.type === 'prompt_received' && m.message === 'Hello Pi')).toBe(true);
+    expect(result.some((m) => m.type === 'session_state')).toBe(true);
   }, 10000);
 
   it('routes browser_tool_response to browser client registry instead of rejecting', async () => {
@@ -185,8 +195,8 @@ describe('bridge websocket server', () => {
 
     // Monkey-patch handleClientCommand to throw
     const originalHandle = app.handleClientCommand.bind(app);
-    app.handleClientCommand = (...args: Parameters<typeof originalHandle>) => {
-      originalHandle(...args);
+    app.handleClientCommand = async (...args: Parameters<typeof originalHandle>) => {
+      await originalHandle(...args);
       throw new Error('Simulated command error');
     };
 
@@ -201,12 +211,12 @@ describe('bridge websocket server', () => {
     servers.push(ws);
     await new Promise<void>((resolve) => ws.once('open', resolve));
 
-    // We should get prompt_received (broadcast) + error response
+    // Collect messages until we get an error
     const messages: Record<string, unknown>[] = [];
     const messagePromise = new Promise<Record<string, unknown>[]>((resolve) => {
       const handler = (data: Buffer) => {
         messages.push(JSON.parse(data.toString()) as Record<string, unknown>);
-        if (messages.length >= 2) {
+        if (messages.some((m) => m.type === 'error')) {
           ws.removeListener('message', handler);
           resolve(messages);
         }
@@ -217,9 +227,9 @@ describe('bridge websocket server', () => {
     ws.send(JSON.stringify({ type: 'prompt', message: 'Will fail' }));
 
     const result = await messagePromise;
-    expect(result).toHaveLength(2);
-    expect(result[0]).toMatchObject({ type: 'prompt_received', message: 'Will fail' });
-    expect(result[1]).toMatchObject({ type: 'error' });
-    expect(result[1].error).toContain('Simulated command error');
+    expect(result.some((m) => m.type === 'prompt_received' && m.message === 'Will fail')).toBe(true);
+    const error = result.find((m) => m.type === 'error');
+    expect(error).toBeDefined();
+    expect(error!.error).toContain('Simulated command error');
   }, 10000);
 });

@@ -33,7 +33,7 @@ export function attachWebSocketServer(
       socket.send(JSON.stringify({ type: 'session_state', session: currentSession }));
     }
 
-    socket.on('message', (data) => {
+    socket.on('message', async (data) => {
       let parsed: unknown;
       try {
         parsed = JSON.parse(data.toString());
@@ -63,7 +63,7 @@ export function attachWebSocketServer(
       }
 
       try {
-        const session = app?.handleClientCommand(parsed);
+        const session = await app?.handleClientCommand(parsed);
         socket.send(JSON.stringify({ type: 'session_state', session }));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
