@@ -149,7 +149,6 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     // Built-in commands (handled by bridge, not extension runner)
     const builtInCommands: CommandInfo[] = [
       { name: 'compact', description: 'Compact the conversation context', source: 'builtin', hasCompletions: false },
-      { name: 'model', description: 'Select model from available models', source: 'builtin', hasCompletions: false },
       { name: 'thinking', description: 'Cycle thinking level', source: 'builtin', hasCompletions: false },
     ];
 
@@ -230,7 +229,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
   }
 
   /**
-   * Handle built-in slash commands (/model, /compact, /thinking) directly in the bridge.
+   * Handle built-in slash commands (/compact, /thinking) directly in the bridge.
    * These commands are NOT registered as extension commands in the SDK — they are handled
    * at the interactive-mode level in the TUI. For the web UI, we handle them here.
    * 
@@ -253,7 +252,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     const spaceIndex = message.indexOf(' ');
     const commandName = spaceIndex === -1 ? message.slice(1) : message.slice(1, spaceIndex);
     
-    if (commandName === 'model' || commandName === 'compact' || commandName === 'thinking') {
+    if (commandName === 'compact' || commandName === 'thinking') {
       // Spawn the actual command work as fire-and-forget
       void executeSlashCommand(commandName, session, readyPromise, broadcastClients, uiContext);
       return true;
@@ -286,9 +285,6 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     }
 
     switch (commandName) {
-      case 'model':
-        await handleSlashModel(session, broadcastClients);
-        break;
       case 'compact':
         await handleSlashCompact(session, broadcastClients);
         break;
@@ -333,53 +329,6 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
       } as unknown as import('../protocol/index.js').JsonObject);
     } catch (error) {
       console.warn('[Bridge] Failed to broadcast model list:', error);
-    }
-  }
-
-  async function handleSlashModel(
-    session: unknown,
-    broadcastClients: { broadcast: (msg: unknown) => void }
-  ) {
-    try {
-      const modelRegistry = (session as any).modelRegistry;
-      if (!modelRegistry) {
-        broadcastClients.broadcast({ type: 'bridge_error', error: 'No model registry available' });
-        return;
-      }
-
-      // Refresh and get available models
-      if (typeof modelRegistry.refresh === 'function') {
-        modelRegistry.refresh();
-      }
-      
-      const availableModels = typeof modelRegistry.getAvailable === 'function'
-        ? await modelRegistry.getAvailable()
-        : [];
-      
-      if (!availableModels || availableModels.length === 0) {
-        broadcastClients.broadcast({ type: 'extension_ui_notify', message: 'No models available. Configure API keys first.' });
-        return;
-      }
-
-      // Get current model
-      const currentModel = (session as any).model;
-
-      // Send model list as a dedicated event (not via extension_ui_request)
-      // so the chrome extension can render a persistent selector
-      broadcastClients.broadcast({
-        type: 'model_list',
-        models: availableModels.map((m: any) => ({
-          provider: m.provider,
-          id: m.id,
-          name: m.name || m.id,
-        })),
-        currentProvider: currentModel?.provider,
-        currentModelId: currentModel?.id,
-      } as unknown as import('../protocol/index.js').JsonObject);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[Bridge] /model command failed:', error);
-      broadcastClients.broadcast({ type: 'bridge_error', error: `Model selection failed: ${errorMessage}` });
     }
   }
 
