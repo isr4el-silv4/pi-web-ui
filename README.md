@@ -11,6 +11,14 @@
 
 ---
 
+## 📋 Prerequisites
+
+- **Node.js** ≥ 18 (ESM modules, `fetch` built-in)
+- **Pi Coding Agent** ([pi.dev](https://pi.dev))
+- **Chrome Extension** — [Here](https://chromewebstore.google.com/detail/pi-coding-agent-web-ui/clhbmkkjcoknpbkicpfalmapgogeikhi?hl=en&authuser=0)
+- **Google Chrome** (or any Chromium-based browser)
+
+
 ## 💡 Philosophy
 
 **Your session shouldn't be confined to one tool.** When you're debugging a frontend issue, you switch between your terminal (where Pi lives) and your browser (where the problem is). Every switch costs context. Every copy-paste loses nuance.
@@ -50,17 +58,6 @@ pi-web-ui is the **server-side bridge** that connects three pieces:
          │                                                │
    Chrome tabs ◄──────── Chrome DevTools Protocol ────── Pi Coding Agent
 ```
-
----
-
-## 📋 Prerequisites
-
-- **Node.js** ≥ 18 (ESM modules, `fetch` built-in)
-- **Pi Coding Agent** ([pi.dev](https://pi.dev))
-- **Chrome Extension** — [Here](https://chromewebstore.google.com/detail/pi-coding-agent-web-ui/clhbmkkjcoknpbkicpfalmapgogeikhi?hl=en&authuser=0)
-- **Google Chrome** (or any Chromium-based browser)
-
----
 
 ## 📦 Installation
 
