@@ -1,6 +1,6 @@
 {
   "name": "@isr4el-silv4/pi-web-ui",
-  "version": "1.0.8",
+  "version": "1.0.10",
   "private": false,
   "description": "Chrome side-panel UI and local bridge extension for Pi.",
   "license": "Apache-2.0",
@@ -9,8 +9,8 @@
     "url": "https://github.com/isr4el-silv4/pi-web-ui.git"
   },
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "index.ts",
+  "types": "index.ts",
   "scripts": {
     "test": "vitest run",
     "build": "tsc -p tsconfig.json",
