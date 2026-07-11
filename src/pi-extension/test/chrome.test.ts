@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createChromeOpener, getChromeCommandCandidates } from '../chrome.js';
 
+const STORE_URL = 'https://chromewebstore.google.com/detail/pi-coding-agent-web-ui/clhbmkkjcoknpbkicpfalmapgogeikhi?hl=en-US&utm_source=ext_sidebar';
+
 function makeMockChild(options: { emitError?: boolean; emitExitCode?: number }) {
   const listeners: Record<string, ((...args: unknown[]) => void)[]> = {};
   const child = {
@@ -39,7 +41,7 @@ describe('chrome opener', () => {
 
     expect(spawn).toHaveBeenCalledWith(
       'google-chrome',
-      ['http://localhost:43117/open'],
+      [STORE_URL],
       expect.objectContaining({ detached: true, stdio: 'ignore' }),
     );
   });
@@ -111,7 +113,7 @@ describe('chrome opener', () => {
 
     expect(spawn).toHaveBeenCalledWith(
       'open',
-      ['-a', 'Google Chrome', 'http://localhost:43117/open'],
+      ['-a', 'Google Chrome', STORE_URL],
       expect.objectContaining({ detached: true, stdio: 'ignore' }),
     );
   });
@@ -124,7 +126,7 @@ describe('chrome opener', () => {
 
     expect(spawn).toHaveBeenCalledWith(
       'cmd',
-      ['/c', 'start', 'chrome', 'http://localhost:43117/open'],
+      ['/c', 'start', 'chrome', STORE_URL],
       expect.objectContaining({ detached: true, stdio: 'ignore' }),
     );
   });

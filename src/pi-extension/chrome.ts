@@ -46,7 +46,7 @@ export function createChromeOpener(deps: { spawn?: Spawn; platform?: Platform } 
   return {
     async open({ port }) {
       const candidates = getChromeCommandCandidates(platform);
-      const url = `http://localhost:${port}/open`;
+      const url = 'https://chromewebstore.google.com/detail/pi-coding-agent-web-ui/clhbmkkjcoknpbkicpfalmapgogeikhi?hl=en-US&utm_source=ext_sidebar';
 
       for (const command of candidates) {
         try {
