@@ -5,5 +5,7 @@ coverage/
 *.log
 .idea/
 plans/
+.pi/
 package-lock.json
 .npmrc
+Google_Chrome_logo.png

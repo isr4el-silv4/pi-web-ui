@@ -5,6 +5,10 @@ coverage/
 *.log
 .idea/
 plans/
+*test/
 package-lock.json
 *.test.ts
 .github/
+Google_Chrome_logo.png
+.pi/
+*.gitkeep
