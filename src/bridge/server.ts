@@ -9,6 +9,7 @@ import { attachWebSocketServer } from './websocket-server.js';
 import { createDefaultPiSdkAdapter, createSdkSessionHost, resolveCwd, type SdkAdapter } from './sdk-session.js';
 import { createExtensionUiAdapter, type UiResponse } from './extension-ui-adapter.js';
 import { createWebUiContext } from './web-ui-context.js';
+import { mergeCurrentModel } from './model-list.js';
 
 export function createBridgeApp(options: { context: BridgeStartContext; pid?: number; sdkHost?: { create(options: { cwd: string; sessionPath?: string }): Promise<unknown> }; ui?: { respond(response: UiResponse): boolean } }) {
   const clients = createBrowserClientRegistry();
@@ -299,27 +300,32 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     if (!session) return;
     try {
       const modelRegistry = (session as any).modelRegistry;
-      if (!modelRegistry) return;
+      // The active model may still be broadcast even without a registry, but we
+      // need one to enumerate the full available list.
+      const currentModel = (session as any).model;
 
-      if (typeof modelRegistry.refresh === 'function') {
+      if (typeof modelRegistry?.refresh === 'function') {
         modelRegistry.refresh();
       }
-      
-      const availableModels = typeof modelRegistry.getAvailable === 'function'
+
+      const availableModels = typeof modelRegistry?.getAvailable === 'function'
         ? await modelRegistry.getAvailable()
         : [];
-      
-      if (!availableModels || availableModels.length === 0) return;
+
+      // Ensure the active/default model is always listed. It may be a
+      // synthesized fallback (e.g. a default model id that doesn't exactly match
+      // a registered built-in) and therefore absent from getAvailable(); without
+      // this it would be invisible in the extension's model picker.
+      const modelsToShow = mergeCurrentModel(availableModels ?? [], currentModel);
+      if (modelsToShow.length === 0) return;
 
       // Cache the model objects so set_model can use the same instances
-      cachedModels = availableModels.map((m: any) => ({
+      cachedModels = modelsToShow.map((m: any) => ({
         provider: m.provider,
         id: m.id,
         name: m.name || m.id,
         _ref: m, // Keep a reference to the actual model object
       }));
-
-      const currentModel = (session as any).model;
 
       clients.broadcast({
         type: 'model_list',
