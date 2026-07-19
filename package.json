@@ -38,11 +38,14 @@
     "image": "https://i.imgur.com/kRzvtpk.jpeg"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.78.1",
     "@sinclair/typebox": "^0.34.49",
     "ws": "^8.21.0"
   },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
     "@types/node": "^22.10.2",
     "@types/ws": "^8.18.1",
     "dompurify": "^3.4.9",

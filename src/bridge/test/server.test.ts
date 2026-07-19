@@ -511,3 +511,70 @@ describe('bridge app abort', () => {
     expect((assistantMessages[0] as any).text).toBe('Error response text');
   });
 });
+
+describe('bridge app model list broadcast', () => {
+  // The session's active model may be a synthesized fallback (e.g. a default
+  // model id like `zai/glm-5.2` that is not a registered built-in) and therefore
+  // absent from modelRegistry.getAvailable(). It must still be sent to clients so
+  // it is visible/selectable in the extension picker. Regression test for #1.
+  it('includes the active model in model_list even when absent from getAvailable()', async () => {
+    const openai = { provider: 'openai', id: 'gpt-4', name: 'GPT-4' };
+    const anthropic = { provider: 'anthropic', id: 'claude-3', name: 'Claude 3' };
+    const glmFallback = { provider: 'zai', id: 'glm-5.2', name: 'glm-5.2' };
+
+    const fakeSession = {
+      modelRegistry: {
+        refresh: () => {},
+        getAvailable: async () => [openai, anthropic],
+      },
+      model: glmFallback,
+    };
+
+    const sdkHost = { create: vi.fn(async () => fakeSession) };
+
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      sdkHost,
+    });
+
+    const received: any[] = [];
+    app.browserClients.addClient({ send: (msg: string) => received.push(JSON.parse(msg)) });
+
+    // Flush the async SDK creation -> broadcastModelList chain.
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    const modelList = received.find((m) => m.type === 'model_list');
+    expect(modelList).toBeDefined();
+    expect(modelList.currentProvider).toBe('zai');
+    expect(modelList.currentModelId).toBe('glm-5.2');
+    const ids = modelList.models.map((m: any) => `${m.provider}/${m.id}`);
+    expect(ids).toContain('zai/glm-5.2'); // active fallback injected
+    expect(ids).toContain('openai/gpt-4');
+    expect(ids).toContain('anthropic/claude-3');
+  });
+
+  it('broadcasts the active model even when getAvailable() is empty', async () => {
+    const glmFallback = { provider: 'zai', id: 'glm-5.2', name: 'glm-5.2' };
+    const fakeSession = {
+      modelRegistry: { refresh: () => {}, getAvailable: async () => [] },
+      model: glmFallback,
+    };
+    const sdkHost = { create: vi.fn(async () => fakeSession) };
+
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      sdkHost,
+    });
+
+    const received: any[] = [];
+    app.browserClients.addClient({ send: (msg: string) => received.push(JSON.parse(msg)) });
+
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    const modelList = received.find((m) => m.type === 'model_list');
+    expect(modelList).toBeDefined();
+    expect(modelList.models.map((m: any) => `${m.provider}/${m.id}`)).toEqual(['zai/glm-5.2']);
+  });
+});

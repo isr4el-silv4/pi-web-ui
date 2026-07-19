@@ -205,7 +205,25 @@ export function createPiSdkAdapter({ sdk, browserToolExecutor }: { sdk: PiSdkMod
   };
 }
 
+/**
+ * Load the Pi SDK module.
+ *
+ * The bridge is a separate spawned process, so a plain `import(
+ * '@earendil-works/pi-coding-agent')` would resolve the EXTENSION's bundled copy
+ * (which can lag behind the installed `pi` CLI). When spawned by the host
+ * (bridge-process.ts), the host sets `PI_HOST_PI` to its own resolved entry path;
+ * we import that absolute path so the bridge always uses the host's Pi version.
+ * Falls back to the normal specifier when `PI_HOST_PI` is unset (dev/tests/manual).
+ */
+let cachedSdk: PiSdkModuleLike | undefined;
+export async function loadPiSdk(): Promise<PiSdkModuleLike> {
+  if (cachedSdk) return cachedSdk;
+  const specifier = process.env.PI_HOST_PI ?? '@earendil-works/pi-coding-agent';
+  cachedSdk = (await import(specifier)) as unknown as PiSdkModuleLike;
+  return cachedSdk;
+}
+
 export async function createDefaultPiSdkAdapter(browserToolExecutor: BrowserToolExecutorLike): Promise<SdkAdapter> {
-  const sdk = await import('@earendil-works/pi-coding-agent') as unknown as PiSdkModuleLike;
+  const sdk = await loadPiSdk();
   return createPiSdkAdapter({ sdk, browserToolExecutor });
 }
