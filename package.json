@@ -38,7 +38,7 @@
     "image": "https://i.imgur.com/kRzvtpk.jpeg"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.78.1",
+    "@earendil-works/pi-coding-agent": "^0.80.10",
     "@sinclair/typebox": "^0.34.49",
     "ws": "^8.21.0"
   },
