@@ -6,10 +6,10 @@ import { createBrowserToolExecutor } from './browser-tools.js';
 import { createSessionRegistry } from './session-registry.js';
 import { parseStartContext, type BridgeStartContext } from './start-context.js';
 import { attachWebSocketServer } from './websocket-server.js';
-import { createDefaultPiSdkAdapter, createSdkSessionHost, resolveCwd, type SdkAdapter } from './sdk-session.js';
+import { createDefaultPiSdkAdapter, createSdkSessionHost, resolveCwd, loadPiSdk, type SdkAdapter } from './sdk-session.js';
 import { createExtensionUiAdapter, type UiResponse } from './extension-ui-adapter.js';
 import { createWebUiContext } from './web-ui-context.js';
-import { mergeCurrentModel } from './model-list.js';
+import { mergeCurrentModel, normalizeModelRegistry } from './model-list.js';
 
 export function createBridgeApp(options: { context: BridgeStartContext; pid?: number; sdkHost?: { create(options: { cwd: string; sessionPath?: string }): Promise<unknown> }; ui?: { respond(response: UiResponse): boolean } }) {
   const clients = createBrowserClientRegistry();
@@ -299,18 +299,17 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
   async function broadcastModelList(session: unknown) {
     if (!session) return;
     try {
-      const modelRegistry = (session as any).modelRegistry;
+      const registry = normalizeModelRegistry(session);
       // The active model may still be broadcast even without a registry, but we
       // need one to enumerate the full available list.
       const currentModel = (session as any).model;
 
-      if (typeof modelRegistry?.refresh === 'function') {
-        modelRegistry.refresh();
-      }
+      registry?.refresh();
 
-      const availableModels = typeof modelRegistry?.getAvailable === 'function'
-        ? await modelRegistry.getAvailable()
-        : [];
+      // getAvailable works across both SDK shapes: 0.78.x exposed a `modelRegistry`
+      // facade with getAvailable(); 0.80.x exposes a raw `modelRuntime` with
+      // getAvailableSnapshot(). normalizeModelRegistry() papers over that.
+      const availableModels = registry ? await registry.getAvailable() : [];
 
       // Ensure the active/default model is always listed. It may be a
       // synthesized fallback (e.g. a default model id that doesn't exactly match
@@ -629,9 +628,9 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           );
           // Fallback: if not in cache, fetch from registry
           if (!model) {
-            const modelRegistry = (sdkSession as any).modelRegistry;
-            if (modelRegistry && typeof modelRegistry.getAvailable === 'function') {
-              const availableModels = await modelRegistry.getAvailable();
+            const registry = normalizeModelRegistry(sdkSession);
+            if (registry) {
+              const availableModels = await registry.getAvailable();
               const found = availableModels.find((m: any) =>
                 m.provider === command.provider && (m.id === command.modelId || m.name === command.modelId)
               );
@@ -684,7 +683,8 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
  * requires exact cwd match (path hash) which is fragile.
  */
 async function listSessionsForCwd(cwd: string): Promise<Array<{ path: string; name?: string; timestamp: string; firstMessage?: string }>> {
-  const { SessionManager } = await import('@earendil-works/pi-coding-agent');
+  const { SessionManager } = (await loadPiSdk()) as any;
+  if (!SessionManager) return [];
   const allSessions = await SessionManager.listAll();
   
   // Normalize the target cwd for comparison
@@ -744,7 +744,8 @@ function extractSessionCwdSync(sessionPath: string): string | undefined {
  * along with the cwd from the session header.
  */
 async function buildSessionHistory(sessionPath: string): Promise<{ messages: SessionHistoryMessage[]; cwd?: string }> {
-  const { SessionManager } = await import('@earendil-works/pi-coding-agent');
+  const { SessionManager } = (await loadPiSdk()) as any;
+  if (!SessionManager) throw new Error('SessionManager is not available in the host Pi SDK');
   
   const manager = SessionManager.open(sessionPath);
   const context = manager.buildSessionContext();

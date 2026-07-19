@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createPiSdkAdapter, createSdkSessionHost, resolveCwd, createBrowserToolDefinitions } from '../sdk-session.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -323,5 +323,27 @@ describe('resolveCwd', () => {
   it('handles root path "/"', () => {
     const result = resolveCwd('/');
     expect(result).toBe('/');
+  });
+});
+
+describe('loadPiSdk (host version coupling via PI_HOST_PI)', () => {
+  afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); });
+
+  it('imports the module pointed to by PI_HOST_PI when set', async () => {
+    // Point at a always-resolvable built-in; loadPiSdk should import exactly it.
+    vi.stubEnv('PI_HOST_PI', 'node:path');
+    vi.resetModules();
+    const { loadPiSdk } = await import('../sdk-session.js');
+    const sdk: any = await loadPiSdk();
+    expect(typeof sdk.join).toBe('function'); // node:path exports `join`
+  });
+
+  it('caches the loaded module (does not re-import on subsequent calls)', async () => {
+    vi.stubEnv('PI_HOST_PI', 'node:path');
+    vi.resetModules();
+    const { loadPiSdk } = await import('../sdk-session.js');
+    const a = await loadPiSdk();
+    const b = await loadPiSdk();
+    expect(a).toBe(b);
   });
 });

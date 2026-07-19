@@ -231,4 +231,44 @@ describe('bridge process manager', () => {
       stdio: ['ignore', 'ignore', 'pipe'],
     });
   });
+
+  it('passes PI_HOST_PI to the bridge so it uses the host Pi version', async () => {
+    const spawn = vi.fn(() => mockChild(111));
+    let probeCallCount = 0;
+    const manager = createBridgeProcessManager({
+      spawn,
+      statusProbe: vi.fn(async () => {
+        probeCallCount++;
+        if (probeCallCount === 1) return { running: false };
+        return { running: true, pid: 111, port: 43117 };
+      }),
+      bridgeEntryPath: '/ext/dist/bridge/server.js',
+      resolveHostPiEntry: () => '/host/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js',
+    });
+
+    await manager.start({ cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 });
+
+    const env = spawn.mock.calls[0][2].env as Record<string, string>;
+    expect(env.PI_HOST_PI).toBe('/host/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js');
+  });
+
+  it('omits PI_HOST_PI (graceful fallback) when the host entry cannot be resolved', async () => {
+    const spawn = vi.fn(() => mockChild(222));
+    let probeCallCount = 0;
+    const manager = createBridgeProcessManager({
+      spawn,
+      statusProbe: vi.fn(async () => {
+        probeCallCount++;
+        if (probeCallCount === 1) return { running: false };
+        return { running: true, pid: 222, port: 43117 };
+      }),
+      bridgeEntryPath: '/ext/dist/bridge/server.js',
+      resolveHostPiEntry: () => undefined,
+    });
+
+    await manager.start({ cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 });
+
+    const env = spawn.mock.calls[0][2].env as Record<string, string | undefined>;
+    expect(env.PI_HOST_PI).toBeUndefined();
+  });
 });

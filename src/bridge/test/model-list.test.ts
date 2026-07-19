@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeCurrentModel } from '../model-list.js';
+import { mergeCurrentModel, normalizeModelRegistry } from '../model-list.js';
 
 describe('mergeCurrentModel', () => {
   const openai = { provider: 'openai', id: 'gpt-4', name: 'GPT-4' };
@@ -50,5 +50,73 @@ describe('mergeCurrentModel', () => {
     const input = [openai];
     mergeCurrentModel(input, anthropic);
     expect(input).toEqual([openai]);
+  });
+});
+
+describe('normalizeModelRegistry (version-resilient SDK shapes)', () => {
+  it('reads the 0.78.x facade: session.modelRegistry with getAvailable()/refresh()', async () => {
+    const refresh = () => {};
+    const facade = {
+      modelRegistry: {
+        refresh,
+        getAvailable: () => [
+          { provider: 'zai', id: 'glm-5.2', name: 'GLM-5.2' },
+          { provider: 'openai', id: 'gpt-4', name: 'GPT-4' },
+        ],
+      },
+    };
+    const reg = normalizeModelRegistry(facade)!;
+    expect(reg).toBeDefined();
+    expect(await reg.getAvailable()).toHaveLength(2);
+  });
+
+  it('reads the 0.80.x runtime: session.modelRuntime with getAvailableSnapshot()/reloadConfig()', async () => {
+    const runtime = {
+      modelRuntime: {
+        reloadConfig: () => {},
+        getAvailableSnapshot: () => [
+          { provider: 'zai', id: 'glm-5.2', name: 'GLM-5.2' },
+          { provider: 'openrouter', id: 'z-ai/glm-5.2', name: 'Z.ai: GLM 5.2' },
+        ],
+        // 0.80.x modelRuntime also has a (different) getAvailable that must NOT be used
+        getAvailable: () => undefined,
+      },
+    };
+    const reg = normalizeModelRegistry(runtime)!;
+    const models = await reg.getAvailable();
+    expect(models).toHaveLength(2);
+    expect(models.map((m) => m.id)).toEqual(['glm-5.2', 'z-ai/glm-5.2']);
+  });
+
+  it('prefers modelRegistry when both are present (facade is the higher-level API)', async () => {
+    const session = {
+      modelRegistry: { refresh: () => {}, getAvailable: () => [{ provider: 'a', id: '1' }] },
+      modelRuntime: { reloadConfig: () => {}, getAvailableSnapshot: () => [{ provider: 'b', id: '2' }] },
+    };
+    expect((await normalizeModelRegistry(session)!.getAvailable()).map((m) => m.id)).toEqual(['1']);
+  });
+
+  it('returns undefined when the session exposes neither property', () => {
+    expect(normalizeModelRegistry({})).toBeUndefined();
+    expect(normalizeModelRegistry(undefined)).toBeUndefined();
+  });
+
+  it('returns [] when neither getAvailable nor getAvailableSnapshot exists', async () => {
+    const reg = normalizeModelRegistry({ modelRuntime: { reloadConfig: () => {} } })!;
+    expect(await reg.getAvailable()).toEqual([]);
+  });
+
+  it('coerces a non-array result to []', async () => {
+    const reg = normalizeModelRegistry({ modelRuntime: { getAvailableSnapshot: () => undefined } })!;
+    expect(await reg.getAvailable()).toEqual([]);
+  });
+
+  it('refresh() prefers reloadConfig(), falls back to refresh()', () => {
+    const calls: string[] = [];
+    const regRuntime = normalizeModelRegistry({ modelRuntime: { reloadConfig: () => calls.push('reload'), getAvailableSnapshot: () => [] } })!;
+    regRuntime.refresh();
+    const regFacade = normalizeModelRegistry({ modelRegistry: { refresh: () => calls.push('refresh'), getAvailable: () => [] } })!;
+    regFacade.refresh();
+    expect(calls).toEqual(['reload', 'refresh']);
   });
 });

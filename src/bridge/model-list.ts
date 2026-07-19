@@ -40,3 +40,45 @@ export function mergeCurrentModel<T extends ModelLike>(
   );
   return present ? [...availableModels] : [currentModel, ...availableModels];
 }
+
+/**
+ * Version-resilient view over the session's model registry.
+ *
+ * The Pi SDK changed its session shape between releases:
+ *  - 0.78.x exposed `session.modelRegistry` — a facade whose `getAvailable()`
+ *    returns the authed models, and `refresh()` reloads config.
+ *  - 0.80.x exposes `session.modelRuntime` — the raw runtime, whose equivalent
+ *    methods are `getAvailableSnapshot()` and `reloadConfig()`.
+ *
+ * Because the bridge may run against either (it imports the host's Pi via
+ * `PI_HOST_PI`, see `loadPiSdk`), this helper papers over the difference so the
+ * rest of the bridge can call `refresh()` / `getAvailable()` uniformly. Returns
+ * `undefined` when the session exposes neither (no registry at all).
+ */
+export interface NormalizedModelRegistry {
+  /** Reload config/models from disk. Best-effort; never throws. */
+  refresh(): void;
+  /** Authed models (await-safe: works for both sync and async underlying methods). */
+  getAvailable(): Promise<ModelLike[]> | ModelLike[];
+}
+
+export function normalizeModelRegistry(session: unknown): NormalizedModelRegistry | undefined {
+  const reg = (session as any)?.modelRegistry ?? (session as any)?.modelRuntime;
+  if (!reg) return undefined;
+  return {
+    refresh() {
+      try {
+        if (typeof reg.reloadConfig === 'function') reg.reloadConfig();
+        else if (typeof reg.refresh === 'function') reg.refresh();
+      } catch {
+        /* best-effort */
+      }
+    },
+    async getAvailable() {
+      let v: unknown;
+      if (typeof reg.getAvailableSnapshot === 'function') v = await reg.getAvailableSnapshot();
+      else if (typeof reg.getAvailable === 'function') v = await reg.getAvailable();
+      return Array.isArray(v) ? v : [];
+    },
+  };
+}
