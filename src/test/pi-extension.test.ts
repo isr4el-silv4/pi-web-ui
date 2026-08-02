@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { createPiWebUiCommand, registerPiWebUiTools, setController } from '../index.js';
+import createExtension, { createPiWebUiCommand, registerPiWebUiTools, setController } from '../index.js';
 import { createPiWebUiController } from '../pi-extension/launcher.js';
 
 describe('pi-web-ui command', () => {
@@ -77,5 +77,75 @@ describe('register pi-web-ui tools', () => {
     const pi = { registerTool: vi.fn((tool) => { registered.push(tool); }) } as unknown as ExtensionAPI;
     registerPiWebUiTools(pi);
     expect(registered).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'browser_get_page_html' })]));
+  });
+});
+
+describe('createExtension session_start', () => {
+  function createMockPi() {
+    const handlers: Record<string, Function> = {};
+    const registered: unknown[] = [];
+    const pi = {
+      on: vi.fn((event: string, handler: Function) => { handlers[event] = handler; }),
+      registerTool: vi.fn((tool: unknown) => { registered.push(tool); }),
+      registerCommand: vi.fn(),
+    } as unknown as ExtensionAPI;
+    return { pi, handlers, registered };
+  }
+
+  it('does NOT register browser tools in TUI (terminal) mode', async () => {
+    const { pi, handlers, registered } = createMockPi();
+    createExtension(pi);
+
+    const sessionStartHandler = handlers['session_start'];
+    expect(sessionStartHandler).toBeDefined();
+
+    const event = { type: 'session_start', reason: 'startup' };
+    const ctx = { mode: 'tui', cwd: '/project' } as ExtensionContext;
+    await sessionStartHandler(event, ctx);
+
+    expect(registered).toHaveLength(0);
+  });
+
+  it('registers browser tools in RPC (Chrome Extension) mode', async () => {
+    const { pi, handlers, registered } = createMockPi();
+    createExtension(pi);
+
+    const sessionStartHandler = handlers['session_start'];
+    const event = { type: 'session_start', reason: 'startup' };
+    const ctx = { mode: 'rpc', cwd: '/project' } as ExtensionContext;
+    await sessionStartHandler(event, ctx);
+
+    expect(registered.length).toBeGreaterThan(0);
+    expect(registered).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'browser_get_page_html' })]));
+  });
+
+  it('registers browser tools in json mode', async () => {
+    const { pi, handlers, registered } = createMockPi();
+    createExtension(pi);
+
+    const sessionStartHandler = handlers['session_start'];
+    const event = { type: 'session_start', reason: 'startup' };
+    const ctx = { mode: 'json', cwd: '/project' } as ExtensionContext;
+    await sessionStartHandler(event, ctx);
+
+    expect(registered.length).toBeGreaterThan(0);
+  });
+
+  it('registers browser tools in print mode', async () => {
+    const { pi, handlers, registered } = createMockPi();
+    createExtension(pi);
+
+    const sessionStartHandler = handlers['session_start'];
+    const event = { type: 'session_start', reason: 'startup' };
+    const ctx = { mode: 'print', cwd: '/project' } as ExtensionContext;
+    await sessionStartHandler(event, ctx);
+
+    expect(registered.length).toBeGreaterThan(0);
+  });
+
+  it('always registers the /pi-web-ui command regardless of mode', () => {
+    const { pi } = createMockPi();
+    createExtension(pi);
+    expect(pi.registerCommand).toHaveBeenCalledWith('pi-web-ui', expect.any(Object));
   });
 });

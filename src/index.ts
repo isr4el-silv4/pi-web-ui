@@ -136,8 +136,13 @@ export function registerPiWebUiTools(pi: ExtensionAPI) {
 export default function createExtension(pi: ExtensionAPI) {
   pi.registerCommand('pi-web-ui', createPiWebUiCommand());
 
-  pi.on('session_start', async (_event, _ctx) => {
-    registerPiWebUiTools(pi);
+  pi.on('session_start', async (_event, ctx) => {
+    // Browser tools are only useful when the Chrome Extension side-panel is
+    // connected (RPC mode). In TUI/terminal mode there is no browser to
+    // interact with, so skip registration to avoid cluttering the tool list.
+    if (ctx.mode !== 'tui') {
+      registerPiWebUiTools(pi);
+    }
   });
 
   pi.on('session_shutdown', async (_event, _ctx) => {
