@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { createPiWebUiController, type PiWebUiController } from './pi-extension/launcher.js';
 import { type JsonObject } from './protocol/index.js';
+import { resolveBrowserToolName } from './bridge/sdk-session.js';
 
 let controller: PiWebUiController | undefined;
 export function getController() { return controller; }
@@ -45,7 +46,7 @@ const browserToolDescriptions: Record<string, string> = {
   browser_get_network_response_body: 'Get the response body of a network request',
   browser_attach_debugger: 'Attach the Chrome debugger to the current tab',
   browser_detach_debugger: 'Detach the Chrome debugger from the current tab',
-  browser_send_cdp_command: 'Send a Chrome DevTools Protocol command (requires confirmation)',
+  browser_send_cdp_command: 'Send a CDP command. Prefer dedicated page readers or supported read-only DOM methods; other commands require confirmation. Never automatically retry a timed-out action.',
   browser_evaluate_script: 'Evaluate JavaScript in the current page (requires confirmation)',
   browser_get_cookies: 'Get cookies for the current page',
   browser_get_local_storage: 'Get local storage for the current page',
@@ -118,15 +119,18 @@ export function registerPiWebUiTools(pi: ExtensionAPI) {
       label: name,
       description: browserToolDescriptions[name] ?? `Execute browser tool ${name}`,
       parameters: { type: 'object', additionalProperties: true },
-      execute: async (_toolCallId, params = {}, _signal, _onUpdate, _ctx) => {
+      execute: async (_toolCallId, params = {}, signal, _onUpdate, _ctx) => {
         if (!controller) {
           return { content: [{ type: 'text', text: 'pi-web-ui bridge not started. Run /pi-web-ui start first.' }], details: {} };
         }
         try {
-          const result = await controller.requestBrowserTool(name, params as JsonObject);
+          const transportName = resolveBrowserToolName(name);
+          const result = signal
+            ? await controller.requestBrowserTool(transportName, params as JsonObject, { signal })
+            : await controller.requestBrowserTool(transportName, params as JsonObject);
           return { content: [{ type: 'text', text: JSON.stringify(result) }], details: {} };
         } catch (error) {
-          return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: {} };
+          return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: {}, isError: true };
         }
       },
     });

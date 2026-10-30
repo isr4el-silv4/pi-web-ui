@@ -15,12 +15,18 @@ import type { JsonObject, JsonValue, SessionStartOptions } from '../protocol/ind
  * copy — which can lag behind the installed `pi`. Returns `undefined` if the
  * host copy cannot be located (the bridge then falls back to its local copy).
  */
-function resolveHostPiEntry(): string | undefined {
+async function resolveHostPiEntry(): Promise<string | undefined> {
   const here = dirname(fileURLToPath(import.meta.url));
   const candidates: string[] = [];
-  // 1. Host loader aliases the specifier to the host's copy.
+  // Import through the host loader: its aliases need not apply to import.meta.resolve.
+  try {
+    const { getPackageDir } = await import('@earendil-works/pi-coding-agent');
+    const entry = resolve(getPackageDir(), 'dist/index.js');
+    if (existsSync(entry)) candidates.push(entry);
+  } catch { /* noop */ }
+  // Native module resolution also supports standalone/development invocations.
   try { candidates.push(fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent'))); } catch { /* noop */ }
-  // 2. Resolve from the host process entry (the `pi` CLI main).
+  // Resolve from the host process entry (the `pi` CLI main).
   try {
     const hostEntry = process.argv[1];
     if (hostEntry) candidates.push(createRequire(resolve(hostEntry)).resolve('@earendil-works/pi-coding-agent'));
@@ -52,7 +58,7 @@ export interface BridgeProcessManager {
   start(options: BridgeStartOptions): Promise<BridgeStartResult>;
   stop(): Promise<void>;
   status(): Promise<BridgeStatus>;
-  requestBrowserTool(tool: string, params: JsonObject): Promise<JsonValue | undefined>;
+  requestBrowserTool(tool: string, params: JsonObject, options?: { signal?: AbortSignal }): Promise<JsonValue | undefined>;
 }
 
 type Spawn = (command: string, args: string[], options: Parameters<typeof nodeSpawn>[2]) => Partial<ChildProcess>;
@@ -106,7 +112,7 @@ export function createBridgeProcessManager(deps: {
   readyPollIntervalMs?: number;
   stopFn?: () => Promise<void>;
   /** Override host pi-coding-agent entry resolution (test seam). */
-  resolveHostPiEntry?: () => string | undefined;
+  resolveHostPiEntry?: () => string | undefined | Promise<string | undefined>;
 } = {}): BridgeProcessManager {
   const spawn = deps.spawn ?? nodeSpawn;
   const statusProbe = deps.statusProbe ?? defaultStatusProbe;
@@ -127,7 +133,7 @@ export function createBridgeProcessManager(deps: {
       // Point the bridge at the HOST's pi-coding-agent so it always tracks the
       // installed `pi` version (the bridge is a separate process and would
       // otherwise resolve the extension's own bundled copy).
-      const hostPiEntry = (deps.resolveHostPiEntry ?? resolveHostPiEntry)();
+      const hostPiEntry = await (deps.resolveHostPiEntry ?? resolveHostPiEntry)();
       const child = spawn(isTypeScript ? 'npx' : process.execPath, isTypeScript ? ['tsx', bridgeEntryPath] : [bridgeEntryPath], {
         cwd: options.cwd,
         detached: true,
@@ -163,20 +169,21 @@ export function createBridgeProcessManager(deps: {
     async status() {
       return statusProbe(43117);
     },
-    async requestBrowserTool(tool, params) {
-      try {
-        const response = await fetch(`http://127.0.0.1:${43117}/browser-tool`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tool, params }),
-        });
-        if (!response.ok) {
-          throw new Error(`Bridge request failed: ${response.status}`);
-        }
-        return (await response.json()) as JsonValue;
-      } catch {
-        return undefined;
+    async requestBrowserTool(tool, params, options = {}) {
+      options.signal?.throwIfAborted();
+      const deadline = AbortSignal.timeout(30_000);
+      const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
+      const response = await fetch(`http://127.0.0.1:${43117}/browser-tool`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tool, params }),
+        signal,
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => undefined) as { error?: unknown } | undefined;
+        throw new Error(typeof detail?.error === 'string' ? detail.error : `Bridge request failed: ${response.status}`);
       }
+      return (await response.json()) as JsonValue;
     },
   };
 }

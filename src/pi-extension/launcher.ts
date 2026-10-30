@@ -14,7 +14,7 @@ export interface PiWebUiController {
   stop(): Promise<string>;
   status(): Promise<string>;
   open(): Promise<string>;
-  requestBrowserTool(tool: string, params: JsonObject): Promise<JsonValue | undefined>;
+  requestBrowserTool(tool: string, params: JsonObject, options?: { signal?: AbortSignal }): Promise<JsonValue | undefined>;
 }
 
 export function parsePiWebUiCommand(args: string[]): { command: PiWebUiCommand } {
@@ -64,8 +64,10 @@ export function createPiWebUiController(deps: {
       await chrome.open({ port: DEFAULT_BRIDGE_PORT });
       return 'Pi Web UI opened in Chrome.';
     },
-    async requestBrowserTool(tool, params) {
-      return bridge.requestBrowserTool(tool, params);
+    async requestBrowserTool(tool, params, options) {
+      return options?.signal
+        ? bridge.requestBrowserTool(tool, params, options)
+        : bridge.requestBrowserTool(tool, params);
     },
   };
 }

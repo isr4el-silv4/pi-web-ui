@@ -1,7 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import * as fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { isClientCommand, type ClientCommand, type JsonObject, type JsonValue, type SessionHistoryMessage, type CommandInfo, type SkillInfo, type TemplateInfo, type CompletionItem } from '../protocol/index.js';
-import { createBrowserClientRegistry, type BrowserClientRegistry } from './browser-client.js';
+import { createBrowserClientRegistry, type BrowserClientRegistry, type BrowserToolRequestOptions } from './browser-client.js';
 import { createBrowserToolExecutor } from './browser-tools.js';
 import { createSessionRegistry } from './session-registry.js';
 import { parseStartContext, type BridgeStartContext } from './start-context.js';
@@ -12,13 +13,13 @@ import { createWebUiContext } from './web-ui-context.js';
 import { mergeCurrentModel, normalizeModelRegistry } from './model-list.js';
 
 export function createBridgeApp(options: { context: BridgeStartContext; pid?: number; sdkHost?: { create(options: { cwd: string; sessionPath?: string }): Promise<unknown> }; ui?: { respond(response: UiResponse): boolean } }) {
-  const clients = createBrowserClientRegistry();
+  const clients = createBrowserClientRegistry({ onEmpty: () => uiAdapter.cancelPending(new Error('Chrome extension disconnected')) });
   const uiAdapter = createExtensionUiAdapter({ broadcast: (msg) => clients.broadcast(msg as JsonObject) });
   const webUiContext = createWebUiContext({ broadcast: (msg) => clients.broadcast(msg) });
   const sessions = createSessionRegistry();
   sessions.createSession(options.context);
   let sdkSession: unknown;
-  let cachedModels: Array<{ provider: string; id: string; name: string }> = [];
+  let cachedModels: Array<{ provider: string; id: string; name: string; _ref?: unknown }> = [];
   let unsubscribeSdk: (() => void) | undefined;
   // Track whether the user requested an abort — suppress any message_end arriving after
   let aborted = false;
@@ -245,7 +246,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     message: string,
     session: unknown,
     readyPromise: Promise<unknown>,
-    broadcastClients: { broadcast: (msg: unknown) => void },
+    broadcastClients: Pick<BrowserClientRegistry, 'broadcast'>,
     uiContext: { select: (title: string, options: string[]) => Promise<string | undefined> }
   ): boolean {
     if (!message.startsWith('/')) return false;
@@ -267,7 +268,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     commandName: string,
     session: unknown,
     readyPromise: Promise<unknown>,
-    broadcastClients: { broadcast: (msg: unknown) => void },
+    broadcastClients: Pick<BrowserClientRegistry, 'broadcast'>,
     uiContext: { select: (title: string, options: string[]) => Promise<string | undefined> }
   ) {
     // Wait for SDK session to be ready if not yet available
@@ -339,7 +340,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
 
   async function handleSlashCompact(
     session: unknown,
-    broadcastClients: { broadcast: (msg: unknown) => void }
+    broadcastClients: Pick<BrowserClientRegistry, 'broadcast'>
   ): Promise<boolean> {
     try {
       if (typeof (session as any).compact !== 'function') {
@@ -362,7 +363,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
 
   async function handleSlashThinking(
     session: unknown,
-    broadcastClients: { broadcast: (msg: unknown) => void }
+    broadcastClients: Pick<BrowserClientRegistry, 'broadcast'>
   ): Promise<boolean> {
     try {
       if (typeof (session as any).cycleThinkingLevel !== 'function') {
@@ -383,12 +384,17 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     }
   }
 
+  function cancelBrowserRequests() {
+    uiAdapter.cancelPending();
+    clients.cancelPending();
+  }
+
   // Create browser tool executor for SDK integration
   const transport = {
-    requestBrowserTool: async (tool: string, params: JsonObject) => {
+    requestBrowserTool: async (tool: string, params: JsonObject, requestOptions: BrowserToolRequestOptions = {}) => {
       const session = sessions.getCurrentSession() ?? { id: 'default', cwd: options.context.cwd, cookieAccessEnabled: options.context.cookieAccessEnabled, storageAccessEnabled: options.context.storageAccessEnabled };
       const executor = createBrowserToolExecutor({ ...clients, confirm: uiAdapter.confirm, input: uiAdapter.input, notify: uiAdapter.notify }, session);
-      return executor.execute(tool, params);
+      return executor.execute(tool, params, requestOptions);
     },
   };
 
@@ -438,6 +444,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
     async handleClientCommand(command: ClientCommand) {
       switch (command.type) {
         case 'new_session': {
+          cancelBrowserRequests();
           aborted = false;
           const resolvedCwd = resolveCwd(command.cwd);
           const session = sessions.createSession({ cwd: resolvedCwd });
@@ -456,6 +463,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           return session;
         }
         case 'resume_session': {
+          cancelBrowserRequests();
           aborted = false;
           // 1. Build and broadcast session history (async, fires in background)
           buildSessionHistory(command.sessionPath)
@@ -561,6 +569,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           clients.broadcast({ type: 'prompt_received', message: command.message });
           return sessions.getCurrentSession();
         case 'abort':
+          cancelBrowserRequests();
           aborted = true;
           console.log('[Bridge] Abort received, sdkSession exists:', !!sdkSession);
           if (sdkSession) {
@@ -589,7 +598,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           const handledByUi = options.ui?.respond({ id: command.id, value: command.value });
           const handledByWeb = webUiContext.respond({ id: command.id, value: command.value });
           const handledByAdapter = uiAdapter.respond({ id: command.id, value: command.value });
-          return { handled: handledByUi ?? handledByWeb ?? handledByAdapter };
+          return { handled: Boolean(handledByUi || handledByWeb || handledByAdapter) };
         case 'list_resources': {
           // If SDK session isn't ready yet, wait for it
           if (!sdkSession) {
@@ -664,8 +673,8 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
         }
       }
     },
-    async executeBrowserTool(tool: string, params: JsonObject): Promise<JsonValue | undefined> {
-      return transport.requestBrowserTool(tool, params);
+    async executeBrowserTool(tool: string, params: JsonObject, requestOptions: BrowserToolRequestOptions = {}): Promise<JsonValue | undefined> {
+      return transport.requestBrowserTool(tool, params, requestOptions);
     },
     get ready() {
       return ready;
@@ -847,8 +856,8 @@ async function readBody(request: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-export function createHttpServer(context: BridgeStartContext) {
-  const app = createBridgeApp({ context });
+export function createHttpServer(context: BridgeStartContext, sdkHost?: Parameters<typeof createBridgeApp>[0]['sdkHost']) {
+  const app = createBridgeApp({ context, sdkHost });
   const server = createServer(async (request, response) => {
     if (request.method === 'GET' && request.url === '/status') return sendJson(response, 200, app.status());
     if (request.method === 'GET' && request.url === '/open') {
@@ -867,14 +876,24 @@ export function createHttpServer(context: BridgeStartContext) {
       return sendJson(response, 200, await app.handleClientCommand(parsed));
     }
     if (request.method === 'POST' && request.url === '/browser-tool') {
-      const { tool, params } = JSON.parse(await readBody(request)) as { tool?: string; params?: JsonObject };
-      if (!tool) return sendJson(response, 400, { error: 'Missing tool name' });
+      const controller = new AbortController();
+      const onClose = () => {
+        if (!response.writableEnded) controller.abort(new Error('Browser tool client disconnected'));
+      };
+      response.once('close', onClose);
+      const timer = setTimeout(() => controller.abort(new Error('Browser tool request expired')), 30_000);
       try {
-        const result = await app.executeBrowserTool(tool, params ?? {});
-        return sendJson(response, 200, result);
+        const { tool, params } = JSON.parse(await readBody(request)) as { tool?: string; params?: JsonObject };
+        if (!tool) return sendJson(response, 400, { error: 'Missing tool name' });
+        const result = await app.executeBrowserTool(tool, params ?? {}, { signal: controller.signal });
+        if (!response.destroyed) return sendJson(response, 200, result);
       } catch (error) {
-        return sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+        if (!response.destroyed) return sendJson(response, controller.signal.aborted ? 504 : 500, { error: error instanceof Error ? error.message : String(error) });
+      } finally {
+        clearTimeout(timer);
+        response.removeListener('close', onClose);
       }
+      return;
     }
     return sendJson(response, 404, { error: 'Not found' });
   });
@@ -893,6 +912,6 @@ export async function main() {
   server.listen(context.port, '0.0.0.0');
 }
 
-if (process.argv[1]?.endsWith('/bridge/server.js') || process.argv[1]?.endsWith('/bridge/server.ts')) {
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   void main();
 }

@@ -14,6 +14,7 @@
   "scripts": {
     "test": "vitest run",
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "keywords": [
@@ -38,14 +39,15 @@
     "image": "https://i.imgur.com/kRzvtpk.jpeg"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.49",
     "ws": "^8.21.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*",
+    "@sinclair/typebox": "*"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "*",
+    "@sinclair/typebox": "^0.34.49",
     "@types/node": "^22.10.2",
     "@types/ws": "^8.18.1",
     "dompurify": "^3.4.9",
