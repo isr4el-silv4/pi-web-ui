@@ -1,7 +1,9 @@
 import type { JsonObject } from '../protocol/index.js';
+import type { BrowserToolRequestOptions } from './browser-client.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 /**
  * Resolves a CWD path, ensuring it exists on disk.
@@ -64,7 +66,7 @@ export interface SdkAdapter {
 }
 
 export interface BrowserToolExecutorLike {
-  execute(tool: string, params: JsonObject): Promise<unknown>;
+  execute(tool: string, params: JsonObject, options?: BrowserToolRequestOptions): Promise<unknown>;
 }
 
 interface PiSdkModuleLike {
@@ -109,7 +111,7 @@ const browserToolDescriptions: Record<string, { tool: string; description: strin
   browser_attach_debugger: { tool: 'debugger.attach', description: 'Attach the Chrome debugger to a tab. Automatically enables network and console capture.' },
   browser_detach_debugger: { tool: 'debugger.detach', description: 'Detach the Chrome debugger from a tab.' },
   browser_get_attached_tabs: { tool: 'debugger.getAttachedTabs', description: 'Get all tabs that currently have the debugger attached.' },
-  browser_send_cdp_command: { tool: 'debugger.sendCdpCommand', description: 'Send a raw Chrome DevTools Protocol command to the debugger.' },
+  browser_send_cdp_command: { tool: 'debugger.sendCdpCommand', description: 'Send a CDP command using method and params. For page inspection prefer browser_get_page_html/text or supported read-only DOM commands. Runtime.evaluate and mutation commands require confirmation. Never automatically retry a timed-out action: its outcome may be unknown.' },
   browser_evaluate_script: { tool: 'debugger.evaluateScript', description: 'Evaluate JavaScript in the context of the current page.' },
   browser_get_cookies: { tool: 'cookies.get', description: 'Get cookies for the current page or a specific domain.' },
   browser_get_local_storage: { tool: 'storage.getLocal', description: 'Get localStorage entries for the current page.' },
@@ -120,6 +122,9 @@ const browserToolMap: Record<string, string> = Object.fromEntries(
   Object.entries(browserToolDescriptions).map(([name, { tool }]) => [name, tool]),
 );
 
+export function resolveBrowserToolName(name: string): string {
+  return browserToolDescriptions[name]?.tool ?? name;
+}
 export function createSdkSessionHost(adapter: SdkAdapter) {
   return {
     create(options: { cwd: string; sessionPath?: string }) {
@@ -133,9 +138,11 @@ export function createBrowserToolDefinitions(sdk: Pick<PiSdkModuleLike, 'defineT
     name,
     description,
     parameters: { type: 'object', additionalProperties: true },
-    execute: async (_toolCallId: string, params: JsonObject = {}) => {
+    execute: async (_toolCallId: string, params: JsonObject = {}, signal?: AbortSignal) => {
       try {
-        const result = await executor.execute(bridgeTool, params);
+        const result = signal
+          ? await executor.execute(bridgeTool, params, { signal })
+          : await executor.execute(bridgeTool, params);
         return {
           content: [{ type: 'text', text: JSON.stringify(result) }],
           details: result,
@@ -218,7 +225,10 @@ export function createPiSdkAdapter({ sdk, browserToolExecutor }: { sdk: PiSdkMod
 let cachedSdk: PiSdkModuleLike | undefined;
 export async function loadPiSdk(): Promise<PiSdkModuleLike> {
   if (cachedSdk) return cachedSdk;
-  const specifier = process.env.PI_HOST_PI ?? '@earendil-works/pi-coding-agent';
+  const hostEntry = process.env.PI_HOST_PI;
+  const specifier = hostEntry && path.isAbsolute(hostEntry)
+    ? pathToFileURL(hostEntry).href
+    : hostEntry ?? '@earendil-works/pi-coding-agent';
   cachedSdk = (await import(specifier)) as unknown as PiSdkModuleLike;
   return cachedSdk;
 }

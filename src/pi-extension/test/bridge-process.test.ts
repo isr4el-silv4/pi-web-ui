@@ -1,4 +1,4 @@
-import type { ChildProcess } from 'node:child_process';
+import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import { describe, expect, it, vi } from 'vitest';
 import { createBridgeProcessManager } from '../bridge-process.js';
 
@@ -164,7 +164,7 @@ describe('bridge process manager', () => {
     const { defaultBridgeEntryPath } = await import('../bridge-process.js');
     const path = defaultBridgeEntryPath();
     // Accept both .js (built dist) and .ts (Pi dev, no build needed)
-    expect(path).toMatch(/bridge\/server\.(js|ts)$/);
+    expect(path).toMatch(/bridge[\\/]server\.(js|ts)$/);
   });
 
   it('fallback path should not contain src/dist pattern', async () => {
@@ -173,7 +173,7 @@ describe('bridge process manager', () => {
     const { defaultBridgeEntryPath } = await import('../bridge-process.js');
     const path = defaultBridgeEntryPath();
     // The path should never contain '/src/dist/' - that's a bug
-    expect(path).not.toMatch(/src\/dist\//);
+    expect(path).not.toMatch(/src[\\/]dist[\\/]/);
   });
 
   it('spawns with npx tsx when bridge entry is a .ts file', async () => {
@@ -233,7 +233,7 @@ describe('bridge process manager', () => {
   });
 
   it('passes PI_HOST_PI to the bridge so it uses the host Pi version', async () => {
-    const spawn = vi.fn(() => mockChild(111));
+    const spawn = vi.fn((_command: string, _args: string[], _options?: SpawnOptions) => mockChild(111));
     let probeCallCount = 0;
     const manager = createBridgeProcessManager({
       spawn,
@@ -248,12 +248,12 @@ describe('bridge process manager', () => {
 
     await manager.start({ cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 });
 
-    const env = spawn.mock.calls[0][2].env as Record<string, string>;
+    const env = spawn.mock.calls[0][2]!.env as Record<string, string>;
     expect(env.PI_HOST_PI).toBe('/host/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js');
   });
 
   it('omits PI_HOST_PI (graceful fallback) when the host entry cannot be resolved', async () => {
-    const spawn = vi.fn(() => mockChild(222));
+    const spawn = vi.fn((_command: string, _args: string[], _options?: SpawnOptions) => mockChild(222));
     let probeCallCount = 0;
     const manager = createBridgeProcessManager({
       spawn,
@@ -268,7 +268,7 @@ describe('bridge process manager', () => {
 
     await manager.start({ cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 });
 
-    const env = spawn.mock.calls[0][2].env as Record<string, string | undefined>;
+    const env = spawn.mock.calls[0][2]!.env as Record<string, string | undefined>;
     expect(env.PI_HOST_PI).toBeUndefined();
   });
 });

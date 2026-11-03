@@ -191,7 +191,7 @@ Pi attaches the debugger, captures network traffic, filters for errors, and show
 
 > "Run `document.querySelectorAll('.card').length` in the current tab and tell me how many cards there are."
 
-A confirmation prompt appears in the side panel. Approve it, and Pi executes the script and reports the result.
+A confirmation prompt appears in the side panel. Approve it, and Pi executes the script and reports the result. To skip that prompt for page scripts, tick **auto-approve** in the side panel header (see [Permissions & Safety](#-permissions--safety)).
 
 ### Cookies & Storage (Opt-In)
 
@@ -255,10 +255,22 @@ Sessions are tied to your **working directory** and persisted as JSONL files.
 | Network capture | Allowed | Always |
 | Cookie access | **Disabled** | Header toggle |
 | Storage access | **Disabled** | Header toggle |
-| Script evaluation | **Requires confirmation** | Per-request prompt |
+| Script evaluation | **Requires confirmation** | Per-request prompt, or the **auto-approve** header toggle |
 | Raw CDP commands | **Requires confirmation** | Per-request prompt |
 
 All confirmed sensitive actions are recorded in an **audit log** on the bridge side, so you can review what was executed and when.
+
+The bridge listens on `127.0.0.1` only: `/browser-tool` has no authentication.
+
+**Auto-approve page scripts.** The **auto-approve** checkbox in the side panel header (off by default, and off again for every new or resumed session) lets Pi run page scripts without the prompt: `browser_evaluate_script` and `browser_send_cdp_command` with `Runtime.evaluate`, on any tab. Every other raw CDP method keeps the prompt, because methods such as `Network.getAllCookies` reach beyond the page and around the cookie and storage toggles. Auto-approved calls are audited with `autoApproved: true`. The extension sends `{ "type": "set_auto_approve_scripts", "enabled": true }` to the bridge, and `session_state` reports `autoApproveScriptsEnabled`.
+
+**Trusted origins for unattended runs.** To let an agent run `Runtime.evaluate` (`debugger.sendCdpCommand`) without the prompt on your own test apps, set an exact-origin allowlist in the environment of the process that starts the bridge:
+
+```bash
+PI_WEB_UI_AUTO_APPROVE_EVALUATE_ORIGINS=https://app.example.test,https://localhost:5173
+```
+
+The bridge checks the target tab's origin with `tabs.list` before each call; any other tab, CDP method or tool keeps the prompt. Auto-approved calls are audited with `autoApproved: true`. Unset (the default), nothing changes.
 
 ---
 

@@ -12,6 +12,7 @@ describe('session registry', () => {
       cwd: '/project',
       cookieAccessEnabled: false,
       storageAccessEnabled: false,
+      autoApproveScriptsEnabled: false,
     });
     expect(registry.getCurrentSession()).toEqual(session);
   });
@@ -36,5 +37,17 @@ describe('session registry', () => {
       cookieAccessEnabled: true,
       storageAccessEnabled: true,
     });
+  });
+
+  it('toggles script auto-approval and turns it off for a new session', () => {
+    const registry = createSessionRegistry(() => 'session-4');
+    registry.createSession({ cwd: '/project' });
+
+    expect(registry.setAutoApproveScripts(true)).toMatchObject({ autoApproveScriptsEnabled: true });
+    expect(registry.setAutoApproveScripts(false)).toMatchObject({ autoApproveScriptsEnabled: false });
+
+    registry.setAutoApproveScripts(true);
+    expect(registry.createSession({ cwd: '/other' }).autoApproveScriptsEnabled).toBe(false);
+    expect(registry.resumeSession('/session.jsonl', { cwd: '/other' }).autoApproveScriptsEnabled).toBe(false);
   });
 });

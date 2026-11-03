@@ -8,6 +8,7 @@ export type ClientCommand =
   | { type: 'list_sessions'; cwd: string }
   | { type: 'set_cookie_access'; enabled: boolean }
   | { type: 'set_storage_access'; enabled: boolean }
+  | { type: 'set_auto_approve_scripts'; enabled: boolean }
   | { type: 'extension_ui_response'; id: string; value: unknown }
   | { type: 'list_resources' }
   | { type: 'get_completions'; command: string; args: string }
@@ -85,6 +86,7 @@ export function isClientCommand(value: unknown): value is ClientCommand {
       return typeof value.cwd === 'string';
     case 'set_cookie_access':
     case 'set_storage_access':
+    case 'set_auto_approve_scripts':
       return typeof value.enabled === 'boolean';
     case 'extension_ui_response':
       return typeof value.id === 'string';

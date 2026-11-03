@@ -31,6 +31,18 @@ describe('bridge app', () => {
   });
 });
 
+describe('script auto-approval setting', () => {
+  it('turns the session setting on and off', async () => {
+    const app = createBridgeApp({
+      context: { cwd: '/project', cookieAccessEnabled: false, storageAccessEnabled: false, port: 43117 },
+      pid: 999,
+    });
+
+    expect(await app.handleClientCommand({ type: 'set_auto_approve_scripts', enabled: true })).toMatchObject({ autoApproveScriptsEnabled: true });
+    expect(await app.handleClientCommand({ type: 'set_auto_approve_scripts', enabled: false })).toMatchObject({ autoApproveScriptsEnabled: false });
+  });
+});
+
 describe('resume_session uses session cwd', () => {
   let tmpDir: string;
   let sessionFilePath: string;

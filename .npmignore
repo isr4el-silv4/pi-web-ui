@@ -1,5 +1,7 @@
 node_modules/
-dist/
+docs/
+.local-ticket/
+*.tgz
 coverage/
 .DS_Store
 *.log
