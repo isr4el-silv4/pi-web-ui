@@ -260,6 +260,16 @@ Sessions are tied to your **working directory** and persisted as JSONL files.
 
 All confirmed sensitive actions are recorded in an **audit log** on the bridge side, so you can review what was executed and when.
 
+The bridge listens on `127.0.0.1` only: `/browser-tool` has no authentication.
+
+**Trusted origins for unattended runs.** To let an agent run `Runtime.evaluate` (`debugger.sendCdpCommand`) without the prompt on your own test apps, set an exact-origin allowlist in the environment of the process that starts the bridge:
+
+```bash
+PI_WEB_UI_AUTO_APPROVE_EVALUATE_ORIGINS=https://app.example.test,https://localhost:5173
+```
+
+The bridge checks the target tab's origin with `tabs.list` before each call; any other tab, CDP method or tool keeps the prompt. Auto-approved calls are audited with `autoApproved: true`. Unset (the default), nothing changes.
+
 ---
 
 ## 📄 License

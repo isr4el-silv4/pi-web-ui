@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { isClientCommand, type ClientCommand, type JsonObject, type JsonValue, type SessionHistoryMessage, type CommandInfo, type SkillInfo, type TemplateInfo, type CompletionItem } from '../protocol/index.js';
 import { createBrowserClientRegistry, type BrowserClientRegistry, type BrowserToolRequestOptions } from './browser-client.js';
-import { createBrowserToolExecutor } from './browser-tools.js';
+import { createBrowserToolExecutor, parseAutoApproveEvaluateOrigins } from './browser-tools.js';
 import { createSessionRegistry } from './session-registry.js';
 import { parseStartContext, type BridgeStartContext } from './start-context.js';
 import { attachWebSocketServer } from './websocket-server.js';
@@ -18,6 +18,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
   const webUiContext = createWebUiContext({ broadcast: (msg) => clients.broadcast(msg) });
   const sessions = createSessionRegistry();
   sessions.createSession(options.context);
+  const browserToolPolicy = { autoApproveEvaluateOrigins: parseAutoApproveEvaluateOrigins(process.env.PI_WEB_UI_AUTO_APPROVE_EVALUATE_ORIGINS) };
   let sdkSession: unknown;
   let cachedModels: Array<{ provider: string; id: string; name: string; _ref?: unknown }> = [];
   let unsubscribeSdk: (() => void) | undefined;
@@ -393,7 +394,7 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
   const transport = {
     requestBrowserTool: async (tool: string, params: JsonObject, requestOptions: BrowserToolRequestOptions = {}) => {
       const session = sessions.getCurrentSession() ?? { id: 'default', cwd: options.context.cwd, cookieAccessEnabled: options.context.cookieAccessEnabled, storageAccessEnabled: options.context.storageAccessEnabled };
-      const executor = createBrowserToolExecutor({ ...clients, confirm: uiAdapter.confirm, input: uiAdapter.input, notify: uiAdapter.notify }, session);
+      const executor = createBrowserToolExecutor({ ...clients, confirm: uiAdapter.confirm, input: uiAdapter.input, notify: uiAdapter.notify }, session, browserToolPolicy);
       return executor.execute(tool, params, requestOptions);
     },
   };
@@ -909,7 +910,8 @@ export async function main() {
   // Wait for SDK session to be ready before accepting connections
   const app = (server as any)._app as ReturnType<typeof createBridgeApp>;
   await app.ready;
-  server.listen(context.port, '0.0.0.0');
+  // Loopback only: /browser-tool has no authentication, and the Chrome extension connects to 127.0.0.1.
+  server.listen(context.port, '127.0.0.1');
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
