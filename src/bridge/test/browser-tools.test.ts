@@ -74,3 +74,54 @@ describe('auto-approved Runtime.evaluate on trusted origins', () => {
       .toEqual(['https://a.test', 'https://b.test:8443']);
   });
 });
+
+describe('script auto-approval session setting', () => {
+  const evaluate = { tabId: 7, method: 'Runtime.evaluate', params: { expression: '1 + 1' } };
+
+  function setup(autoApproveScriptsEnabled: boolean | undefined) {
+    const requestBrowserTool = vi.fn(async (): Promise<JsonValue> => ({ result: { value: 2 } }));
+    const confirm = vi.fn(async () => false);
+    const record = vi.fn();
+    const executor = createBrowserToolExecutor({ requestBrowserTool, confirm, audit: { record } }, { ...session, autoApproveScriptsEnabled });
+    return { executor, requestBrowserTool, confirm, record };
+  }
+
+  it('runs Runtime.evaluate on any tab without a prompt or tabs.list, and audits it', async () => {
+    const { executor, requestBrowserTool, confirm, record } = setup(true);
+
+    await expect(executor.execute('debugger.sendCdpCommand', evaluate)).resolves.toEqual({ result: { value: 2 } });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(requestBrowserTool).toHaveBeenCalledTimes(1);
+    expect(requestBrowserTool).toHaveBeenCalledWith('debugger.sendCdpCommand', evaluate);
+    expect(record).toHaveBeenCalledWith({ action: 'debugger.sendCdpCommand', params: { ...evaluate, autoApproved: true } });
+  });
+
+  it('runs debugger.evaluateScript without a prompt, and audits it', async () => {
+    const { executor, requestBrowserTool, confirm, record } = setup(true);
+    const script = { tabId: 'active', expression: 'document.title' };
+
+    await expect(executor.execute('debugger.evaluateScript', script)).resolves.toEqual({ result: { value: 2 } });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(requestBrowserTool).toHaveBeenCalledWith('debugger.evaluateScript', script);
+    expect(record).toHaveBeenCalledWith({ action: 'debugger.evaluateScript', params: { ...script, autoApproved: true } });
+  });
+
+  it('still asks for other raw CDP methods', async () => {
+    const { executor, requestBrowserTool, confirm } = setup(true);
+
+    await expect(executor.execute('debugger.sendCdpCommand', { tabId: 7, method: 'Network.getAllCookies' }))
+      .rejects.toThrow('Raw CDP command requires confirmation');
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(requestBrowserTool).not.toHaveBeenCalled();
+  });
+
+  it('asks as before when the setting is off or unknown', async () => {
+    for (const value of [false, undefined]) {
+      const { executor, requestBrowserTool, confirm } = setup(value);
+
+      await expect(executor.execute('debugger.evaluateScript', { expression: '1' })).rejects.toThrow('Script evaluation requires confirmation');
+      expect(confirm).toHaveBeenCalledOnce();
+      expect(requestBrowserTool).not.toHaveBeenCalled();
+    }
+  });
+});

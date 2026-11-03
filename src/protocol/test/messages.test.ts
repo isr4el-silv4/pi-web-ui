@@ -51,6 +51,13 @@ describe('protocol messages', () => {
     expect(isClientCommand({ type: 'set_cookie_access', enabled: 'false' })).toBe(false);
   });
 
+  it('identifies set_auto_approve_scripts command', () => {
+    expect(isClientCommand({ type: 'set_auto_approve_scripts', enabled: true })).toBe(true);
+    expect(isClientCommand({ type: 'set_auto_approve_scripts', enabled: false })).toBe(true);
+    expect(isClientCommand({ type: 'set_auto_approve_scripts', enabled: 'true' })).toBe(false);
+    expect(isClientCommand({ type: 'set_auto_approve_scripts' })).toBe(false);
+  });
+
   it('identifies list_sessions command', () => {
     expect(isClientCommand({ type: 'list_sessions', cwd: '/project' })).toBe(true);
     expect(isClientCommand({ type: 'list_sessions' })).toBe(false); // missing cwd

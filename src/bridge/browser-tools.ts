@@ -35,6 +35,11 @@ function request(transport: BrowserToolTransport, tool: BrowserToolName, params:
   return options.signal ? transport.requestBrowserTool(tool, params, options) : transport.requestBrowserTool(tool, params);
 }
 
+/** Page-script tools the session setting approves; any other raw CDP method keeps the prompt. */
+function isPageScript(tool: BrowserToolName, params: JsonObject): boolean {
+  return tool === 'debugger.evaluateScript' || (tool === 'debugger.sendCdpCommand' && params.method === 'Runtime.evaluate');
+}
+
 /** Tab of a `Runtime.evaluate` call the policy could approve. Synchronous, so that otherwise the prompt is raised without any extra await. */
 function autoApprovableEvaluateTab(policy: BrowserToolPolicy, tool: BrowserToolName, params: JsonObject): number | undefined {
   if (!policy.autoApproveEvaluateOrigins?.size || tool !== 'debugger.sendCdpCommand' || params.method !== 'Runtime.evaluate') return undefined;
@@ -61,7 +66,8 @@ export function createBrowserToolExecutor(transport: BrowserToolTransport, sessi
       if (!decision.allowed) {
         if (!decision.requiresConfirmation) throw new Error(decision.reason);
         const tabId = autoApprovableEvaluateTab(policy, tool, params);
-        if (tabId !== undefined && await tabIsOnTrustedOrigin(transport, policy, tabId, options)) {
+        const approvedBySetting = session.autoApproveScriptsEnabled === true && isPageScript(tool, params);
+        if (approvedBySetting || (tabId !== undefined && await tabIsOnTrustedOrigin(transport, policy, tabId, options))) {
           transport.audit?.record({ action: tool, params: { ...params, autoApproved: true } });
         } else {
           const message = `Allow browser tool ${tool}? ${decision.reason}`;

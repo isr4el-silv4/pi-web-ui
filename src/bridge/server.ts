@@ -517,6 +517,8 @@ export function createBridgeApp(options: { context: BridgeStartContext; pid?: nu
           return sessions.setCookieAccess(command.enabled);
         case 'set_storage_access':
           return sessions.setStorageAccess(command.enabled);
+        case 'set_auto_approve_scripts':
+          return sessions.setAutoApproveScripts(command.enabled);
         case 'prompt':
           // Reset abort flag so the new prompt's response is allowed through
           aborted = false;

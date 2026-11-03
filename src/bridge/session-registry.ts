@@ -13,6 +13,7 @@ export interface SessionRegistry {
   getCurrentSession(): SessionState | undefined;
   setCookieAccess(enabled: boolean): SessionState;
   setStorageAccess(enabled: boolean): SessionState;
+  setAutoApproveScripts(enabled: boolean): SessionState;
 }
 
 export function createSessionRegistry(createId: () => string = () => crypto.randomUUID()): SessionRegistry {
@@ -31,6 +32,7 @@ export function createSessionRegistry(createId: () => string = () => crypto.rand
         ...(options.sessionPath ? { sessionPath: options.sessionPath } : {}),
         cookieAccessEnabled: options.cookieAccessEnabled ?? false,
         storageAccessEnabled: options.storageAccessEnabled ?? false,
+        autoApproveScriptsEnabled: false,
       };
       return current;
     },
@@ -46,6 +48,10 @@ export function createSessionRegistry(createId: () => string = () => crypto.rand
     },
     setStorageAccess(enabled) {
       current = { ...requireCurrent(), storageAccessEnabled: enabled };
+      return current;
+    },
+    setAutoApproveScripts(enabled) {
+      current = { ...requireCurrent(), autoApproveScriptsEnabled: enabled };
       return current;
     },
   };
